@@ -1,5 +1,5 @@
 !======================================================================================
-! MZ_Global
+! MZ_AG_AGMAIZE
 ! Interface between DSSAT and AgMaize model
 ! This subroutine is called from plant.for
 !-----------------------------------------------------------------------
@@ -11,18 +11,27 @@
 ! Called from: Plant subroutine: Plant
 ! Calls      : MZ_AG_Phenol, MZ_AG_Leafarea, MZ_AG_Photsynt, MZ_AG_Respiration,
 !              MZ_AG_PartCoefs, MZ_AG_Growth, MZ_AG_RootGro, MZ_AG_Opgrow, MZ_AG_Opharv
+! TODO:
+! - Need to add yrend to drive harvest
+! - harvres (harvest residue)
+! - If harvesting at specific growth stages, send gstdyrdoySim to plant.for
+! - Check N stress factors on different processes
+! - Eventually use composite variables (like "growth") to transfer variables
+! - Refactor GET_Real_Array_NL and PUT_Real_Array_NL in ModuleDefs.for. Separate AgMaize variables 
+!   so that SPAM variables are not affected.
 !======================================================================================
 
-subroutine MZ_AG_AGMAIZE(control, iswitch, SoilProp, weather, st, sw,          & !Input
-                        yrplt, snow, no3, nh4, eop, trwup, harvfrac,           & !Input
-                        mdate, lai, rlv)                                         !Output 
+subroutine MZ_AG_AGMAIZE(control, iswitch, soilprop, weather, st,       & !Input
+           sw, yrplt, yrend, snow, no3, nh4, eop, ep, trwup, harvfrac,  & !Input
+           mdate, xlai, xhlai, rlv, nstres, senesce, unh4, uno3)          !Output
+
 !----------------------------------------------------------------------
 use ModuleDefs
 use MZ_AG_ModuleDefs
 implicit none
 save
 !----------------------------------------------------------------------
-integer, intent(in) :: yrplt
+integer, intent(in) :: yrplt, yrend
 real,    intent(in) :: snow, eop, trwup, harvfrac(2)
 real, dimension(nl), intent(in) :: st, sw, no3, nh4
 integer, intent(out) :: mdate
@@ -32,28 +41,37 @@ type (ControlType), intent(in) :: control
 type (SoilType),    intent(in) :: SoilProp
 type (SwitchType),  intent(in) :: iswitch
 type (WeatherType), intent(in) :: weather
+type(SpeciesType) dataspecies
+type(FileioType)  datafileio
+type(ResidueType) senesce
+type(GrowthType)  growth
 integer :: dynamic, yrdoy
-
+     
 ! Phenology variables
 integer :: growthStage, gstdyrdoySim(20), gstddoySim(20), gstdyearSim(20)
-real :: gti, tlu, lfnum, tnleaf, lftips, anthes, silk, olg, dvs, dvsrate, tmpa, rla, gddcer, dtt, gddae
-real :: gddten, gddapsim, growthtlu(10), elp, elt, stLayer1, rlaSoil, rlaAir, lfnc 
+real :: gti, tlu, tnleafrm, tnleaf, lftips, anthes, silk, olg, dvs, dvsrate, tmpa, rla, gddcer, dtt, gddae
+real :: gddten, gddapsim, growthtlu(10), tnleafphot, tnleaftemp, stLayer1, rlaSoil, rlaAir, lfnc, xstage 
 
 ! Leaf area variables
 integer :: lfn
-real :: lapot(50), greenla(50), greenlaAnth(50), lamaxpot(50), lflon(50)
-real :: pla, lai, latf, lfcols, coltlu, maxlarf, gddladur
+real :: lapot(50), greenla(50), greenlaSilk(50), lamaxpot(50), lflon(50)
+real :: pla, xlai, xhlai, latf, lfcols, coltlu, maxlarf, tluladur, prlsen
 
 ! Photosynthesis and respiration variables
-real :: sw1, pgross, maint, weolg, cvf
+real :: pgross, maint, weolg, cvf
 
 ! Growth and partitioning
-real :: pstres, fr, fsts, flv, fvear, kn, grt, grort, gsh, glv, gst, egr, ggr, wrt, wlv
-real :: wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf, cgrw, swfac
-real :: tadrwAnth, tadrwSilk, seedno, skerwt, stover, wtmain
+real :: pstres, fr, fsts, flv, fvear, kn, grt, grtplt, gsh, glv, gst, egr, ggr, wrt, wlv
+real :: wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf, cgrw, swfac, turfac
+real :: tadrwAnth, tadrwSilk, seedno, skerwt, stover, wtmain, ep
 
 ! Root growth
-real :: cumdep, rtdep, rlv(nl)
+real :: cumdep, rtdep, rlv(nl), rwuep1
+character :: iswwat*1, iswnit*1, files*12, pathsr*80, pathex*80
+
+! Nitrogen
+real :: unh4(nl), uno3(nl), rootn, stovn, ranc, tanc, trnu, nfac, agefac, ndef3, nstres
+real :: wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, pcnl
 
 ! Output
 real :: bwah, sdwtah
@@ -64,107 +82,166 @@ real :: srad, parday, parsunday, parshday, radtotday
 ! Transfer values from constructed data types into local variables
 dynamic = control % dynamic
 yrdoy   = control % yrdoy
+iswwat  = iswitch % iswwat
+iswnit  = iswitch % iswnit
 
 !----------------------------------------------------------------------
 ! Dynamic = runinit or dynamic = seasinit
 !----------------------------------------------------------------------
 if(dynamic==runinit .or. dynamic==seasinit) then   
   
-  sw1 = sw(1)   
+  swfac  = 1.0
+  turfac = 1.0
+  nfac   = 1.0
+  agefac = 1.0
+  ndef3  = 1.0
+  nstres = 1.0  
+  
+ !Read all sections of fileio and transfer variables
+ call readfileio(control, 'ALLSEC', datafileio)
+ files  = datafileio % files
+ pathsr = datafileio % pathsr
+ pathex = datafileio % pathex
+  
+ !Read root parameters from species file and transfer variables
+ call readspecies(files, pathsr, '*ROOT ', dataspecies)
+ rwuep1 = dataspecies % rwuep1
    
-  call MZ_AG_Phenol(control, iswitch, SoilProp, weather, yrplt, sw, st, snow, cgr,               & !Input
-       gti, tlu, lfnum, tnleaf, anthes, silk, olg, dvs, dvsrate, growthStage, tmpa, rla,         & !Output
+  call MZ_AG_Phenol(control, iswitch, SoilProp, weather, yrplt, sw, st, snow, cgr, nfac,         & !Input
+       gti, tlu, tnleafrm, tnleaf, anthes, silk, olg, dvs, dvsrate, growthStage, tmpa, rla,      & !Output
        gddcer, dtt, gddae, gddten, gddapsim, mdate, gstdyrdoySim, gstddoySim, gstdyearSim,       & !Output 
-       growthtlu, elp, elt, stLayer1, rlaSoil, rlaAir, lfnc, coltlu)                               !Output
-
-  call MZ_AG_Leafarea(control, tlu, tnleaf, lfnc, tmpa, rla,             & !Input 
-       gddcer, dtt, dvs, dvsrate, olg, swfac, gstdyrdoySim,              & !Input 
-       pla, lai, latf, lapot, greenla, greenlaAnth,                      & !Output
-       lamaxpot, lftips, lfcols, lfn, maxlarf, lflon, gddladur)            !Output 
+       growthtlu, tnleafphot, tnleaftemp, stLayer1, rlaSoil, rlaAir, lfnc, coltlu, xstage)         !Output
        
-  call MZ_AG_Photsynt(control, soilprop, weather, sw1,         & !Input
+  call MZ_AG_Leafarea(control, eop, ep, tlu, tnleaf, lfnc, tmpa, rla,   & !Input 
+       dvs, olg, gstdyrdoySim, swfac, turfac, agefac,                   & !Input 
+       pla, prlsen, xlai, xhlai, latf, lapot, greenla, greenlaSilk,     & !Output
+       lamaxpot, lftips, lfcols, lfn, maxlarf, lflon, tluladur)           !Output 
+       
+  call MZ_AG_Photsynt(control, soilprop, weather, sw,          & !Input
        gddae, dvs, lfn, greenla, lflon, lamaxpot, lapot,       & !Input
        pgross, srad, parday, parsunday, parshday, radtotday)     !Output  
         
-!  call MZ_AG_Respiration(control, weather,                     & !Input
-!       dvs, wlvtop, wlvbot, wst, weolg, wrt, cgrw,             & !Input
-!       maint)                                                    !Output
+  call MZ_AG_Respiration(control, weather,                     & !Input
+       dvs, wlvtop, wlvbot, wst, weolg, wrt, cgrw,             & !Input
+       maint)                                                    !Output
 
-  call MZ_AG_RespirIXIM(control, weather,                      & !Input
-       pgross, wtmain, glv, grt, gst, egr, ggr,                & !Input
-       maint, cvf)                                               !Output
+!  call MZ_AG_RespirIXIM(control, weather,                      & !Input
+!       pgross, wtmain, glv, grt, gst, egr, ggr,                & !Input
+!       maint, cvf)                                               !Output
        
   call MZ_AG_PartCoefs(control, weather, yrplt,                & !Input
        silk, tlu, dvs, olg, pstres,                            & !Input
        fr, fsts, flv, fvear)                                     !Output 
        
-  call MZ_AG_Growth(control, weather, iswitch, yrplt, eop, trwup, dvs,       & !Input
-       olg, gstdyrdoySim, lai, pgross, maint, fr, fsts, flv, fvear,          & !Input
-       pstres, kn, grt, grort, gsh, glv, gst, egr, ggr, wrt, wlv, wlvtop,    & !Output
-       wlvbot, wsts, wstr, wst, we, weolg, grain, kw, tadrw, cgr, cgrf, cgrw, & !Output
-       swfac, tadrwAnth, tadrwSilk, seedno, skerwt, stover, wtmain)            !Output 
+  call MZ_AG_Growth(control, weather, iswitch, yrplt, eop, ep, trwup, dvs, tlu, olg, & !Input
+       gstdyrdoySim, xhlai, prlsen, pgross, maint, fr, fsts, flv, fvear, swfac, nstres,      & !Input
+       ndef3, pstres, kn, grt, grtplt, gsh, glv, gst, egr, ggr, wrt, wlv, wlvtop,    & !Output
+       wlvbot, wsts, wstr, wst, we, weolg, grain, kw, tadrw, cgr, cgrf, cgrw, &        !Output
+       tadrwAnth, tadrwSilk, seedno, skerwt, stover, wtmain, growth)                   !Output 
    
   call MZ_AG_RootGro(control, SoilProp, iswitch, no3, nh4, sw, & !Input
-       growthStage, gstdyrdoySim, gddcer, dtt, grort, swfac,   & !Input                                   
+       growthStage, gstdyrdoySim, gddcer, dtt, grtplt, swfac,  & !Input                                   
        cumdep, rtdep, rlv)                                       !Output  
+   
+  if(iswnit /= 'N') then
+     call MZ_AG_NPlant(control, iswitch, weather, soilprop, sw, yrplt, mdate,     & !Input
+          xstage, growth, rlv, no3, nh4, gstdyrdoySim, growthStage, turfac, xhlai,       & !Input
+          senesce, rootn, stovn, ranc, tanc, trnu, nfac, agefac, ndef3,           & !Output
+          nstres, uno3, unh4, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, pcnl)    !Output       
+   else
+     nfac   = 1.0
+     agefac = 1.0
+     ndef3  = 1.0
+     nstres = 1.0               
+  end if      
        
-  call MZ_AG_Opgrow(control, iswitch, yrplt, mdate, growthStage, gti, tlu, lfnum, tnleaf, & !Input
-       anthes, silk, olg, dvs, gddcer, rla, pla, lai, latf, greenla, gddten, gddapsim,    & !Input
-       lftips, lfcols, coltlu, elp, elt, maxlarf, lapot, gddladur, stLayer1, rlaSoil,     & !Input
-       rlaAir, pgross, maint, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr,     & !Input
-       wrt, wlv, wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf,cgrw, eop,   & !Input
-       trwup, swfac, rtdep, rlv, srad, parday, parsunday, parshday, radtotday)    
+  call MZ_AG_Opgrow(control, iswitch, soilprop, yrplt, mdate, growthStage, gti, tlu, tnleafrm, tnleaf,  & !Input
+       anthes, silk, olg, dvs, gddcer, rla, pla, xhlai, latf, greenla, gddten, gddapsim,                & !Input
+       lftips, lfcols, coltlu, tnleafphot, tnleaftemp, maxlarf, lflon, tluladur, stLayer1, rlaSoil,     & !Input
+       rlaAir, pgross, maint, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr,                   & !Input
+       wrt, wlv, wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf,cgrw, eop,            & !Input
+       trwup, swfac, nstres, rtdep, rlv, srad, parday, parsunday, parshday, radtotday)    
       
   call MZ_AG_Opharv(control, iswitch, gstddoySim, gstdyearSim, growthtlu)
   
-  call MZ_AG_Opharv2(control, iswitch, yrplt, harvfrac, growthStage, mdate,              & !Input 
-       gstdyrdoySim, lai, tlu, tnleaf, lftips, greenla, greenlaAnth,                     & !Input
-       tadrwAnth, tadrwSilk, kn, seedno, we, skerwt, stover, swfac, tadrw, grain,        & !Input
-       bwah, sdwtah)                                                                       !Output
+  call MZ_AG_Opharv2(control, iswitch, yrplt, harvfrac, swfac, turfac, senesce,   & !Input
+       agefac, nstres, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, growthStage,  & !Input 
+       mdate, gstdyrdoySim, xhlai, tlu, tnleaf, greenla, greenlaSilk,             & !Input
+       tadrwAnth, tadrwSilk, kn, seedno, we, skerwt, stover, tadrw, grain,        & !Input
+       bwah, sdwtah)                                                                !Output
 
 !----------------------------------------------------------------------
 ! Dynamic = rate
 !----------------------------------------------------------------------
 else if(dynamic == rate) then
   
-  sw1 = sw(1)   
-   
-  call MZ_AG_Phenol(control, iswitch, SoilProp, weather, yrplt, sw, st, snow, cgr,               & !Input
-       gti, tlu, lfnum, tnleaf, anthes, silk, olg, dvs, dvsrate, growthStage, tmpa, rla,         & !Output
+  swfac = 1.0
+  turfac = 1.0
+  WATERON: if(iswwat /= 'N') then
+     if(eop > 0.) then
+       if(trwup*10. < eop) then
+       !if(ep < eop) then
+       ! swfac = ep/eop
+        swfac = trwup*10./eop
+        if(trwup*10./eop < rwuep1) turfac = trwup*10./(eop*rwuep1)
+       !if(swfac < rwuep1) turfac = swfac/rwuep1
+       end if
+     end if    
+  end if WATERON    
+  swfac  = real(int(swfac*1000))/1000
+  turfac = real(int(turfac*1000))/1000   
+  
+  call MZ_AG_Phenol(control, iswitch, SoilProp, weather, yrplt, sw, st, snow, cgr, nfac,         & !Input
+       gti, tlu, tnleafrm, tnleaf, anthes, silk, olg, dvs, dvsrate, growthStage, tmpa, rla,      & !Output
        gddcer, dtt, gddae, gddten, gddapsim, mdate, gstdyrdoySim, gstddoySim, gstdyearSim,       & !Output 
-       growthtlu, elp, elt, stLayer1, rlaSoil, rlaAir, lfnc, coltlu)                               !Output
+       growthtlu, tnleafphot, tnleaftemp, stLayer1, rlaSoil, rlaAir, lfnc, coltlu, xstage)         !Output
 
 if(growthStage >=1 .AND. growthStage <=10) then       
-  call MZ_AG_Leafarea(control, tlu, tnleaf, lfnc, tmpa, rla,             & !Input 
-       gddcer, dtt, dvs, dvsrate, olg, swfac, gstdyrdoySim,              & !Input 
-       pla, lai, latf, lapot, greenla, greenlaAnth,                      & !Output
-       lamaxpot, lftips, lfcols, lfn, maxlarf, lflon, gddladur)            !Output 
+  call MZ_AG_Leafarea(control, eop, ep, tlu, tnleaf, lfnc, tmpa, rla,   & !Input 
+       dvs, olg, gstdyrdoySim, swfac, turfac, agefac,                   & !Input 
+       pla, prlsen, xlai, xhlai, latf, lapot, greenla, greenlaSilk,     & !Output
+       lamaxpot, lftips, lfcols, lfn, maxlarf, lflon, tluladur)           !Output 
        
-  call MZ_AG_Photsynt(control, soilprop, weather, sw1,         & !Input
+  call MZ_AG_Photsynt(control, soilprop, weather, sw,          & !Input
        gddae, dvs, lfn, greenla, lflon, lamaxpot, lapot,       & !Input
        pgross, srad, parday, parsunday, parshday, radtotday)     !Output  
         
-!  call MZ_AG_Respiration(control, weather,                     & !Input
-!       dvs, wlvtop, wlvbot, wst, weolg, wrt, cgrw,             & !Input
-!       maint)                                                    !Output
+  call MZ_AG_Respiration(control, weather,                     & !Input
+       dvs, wlvtop, wlvbot, wst, weolg, wrt, cgrw,             & !Input
+       maint)                                                    !Output
 
-  call MZ_AG_RespirIXIM(control, weather,                      & !Input
-       pgross, wtmain, glv, grt, gst, egr, ggr,                & !Input
-       maint, cvf)                                               !Output
+!  call MZ_AG_RespirIXIM(control, weather,                      & !Input
+!       pgross, wtmain, glv, grt, gst, egr, ggr,                & !Input
+!       maint, cvf)                                               !Output
        
   call MZ_AG_PartCoefs(control, weather, yrplt,                & !Input
        silk, tlu, dvs, olg, pstres,                            & !Input
        fr, fsts, flv, fvear)                                     !Output 
        
-  call MZ_AG_Growth(control, weather, iswitch, yrplt, eop, trwup, dvs,       & !Input
-       olg, gstdyrdoySim, lai, pgross, maint, fr, fsts, flv, fvear,          & !Input
-       pstres, kn, grt, grort, gsh, glv, gst, egr, ggr, wrt, wlv, wlvtop,    & !Output
-       wlvbot, wsts, wstr, wst, we, weolg, grain, kw, tadrw, cgr, cgrf, cgrw,  & !Output
-       swfac, tadrwAnth, tadrwSilk, seedno, skerwt, stover, wtmain)            !Output 
-       
-  call MZ_AG_RootGro(control, SoilProp, iswitch, no3, nh4, sw, & !Input
-       growthStage, gstdyrdoySim, gddcer, dtt, grort, swfac,   & !Input                                   
+  call MZ_AG_Growth(control, weather, iswitch, yrplt, eop, ep, trwup, dvs, tlu, olg, & !Input
+       gstdyrdoySim, xhlai, prlsen, pgross, maint, fr, fsts, flv, fvear, swfac, nstres,      & !Input
+       ndef3, pstres, kn, grt, grtplt, gsh, glv, gst, egr, ggr, wrt, wlv, wlvtop,    & !Output
+       wlvbot, wsts, wstr, wst, we, weolg, grain, kw, tadrw, cgr, cgrf, cgrw, &        !Output
+       tadrwAnth, tadrwSilk, seedno, skerwt, stover, wtmain, growth)                   !Output 
+  
+  if(iswwat /= 'N') then     
+  call MZ_AG_RootGro(control, SoilProp, iswitch, no3, nh4, sw,  & !Input
+       growthStage, gstdyrdoySim, gddcer, dtt, grtplt, swfac,   & !Input                                   
        cumdep, rtdep, rlv)                                       !Output  
+  end if   
+  
+  if(iswnit /= 'N') then
+     call MZ_AG_NPlant(control, iswitch, weather, soilprop, sw, yrplt, mdate,     & !Input
+          xstage, growth, rlv, no3, nh4, gstdyrdoySim, growthStage, turfac, xhlai,       & !Input
+          senesce, rootn, stovn, ranc, tanc, trnu, nfac, agefac, ndef3,           & !Output
+          nstres, uno3, unh4, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, pcnl)    !Output       
+  else
+     nfac   = 1.0
+     agefac = 1.0
+     ndef3  = 1.0
+     nstres = 1.0               
+  end if     
+     
 end if
 
 !----------------------------------------------------------------------
@@ -172,44 +249,57 @@ end if
 !----------------------------------------------------------------------
 else if(dynamic == integr) then
   
-  sw1 = sw(1)   
-   
-  call MZ_AG_Phenol(control, iswitch, SoilProp, weather, yrplt, sw, st, snow, cgr,               & !Input
-       gti, tlu, lfnum, tnleaf, anthes, silk, olg, dvs, dvsrate, growthStage, tmpa, rla,         & !Output
+  call MZ_AG_Phenol(control, iswitch, SoilProp, weather, yrplt, sw, st, snow, cgr, nfac,         & !Input
+       gti, tlu, tnleafrm, tnleaf, anthes, silk, olg, dvs, dvsrate, growthStage, tmpa, rla,      & !Output
        gddcer, dtt, gddae, gddten, gddapsim, mdate, gstdyrdoySim, gstddoySim, gstdyearSim,       & !Output 
-       growthtlu, elp, elt, stLayer1, rlaSoil, rlaAir, lfnc, coltlu)                               !Output
+       growthtlu, tnleafphot, tnleaftemp, stLayer1, rlaSoil, rlaAir, lfnc, coltlu, xstage)         !Output
 
 if(growthStage >=1 .AND. growthStage <=10) then       
-  call MZ_AG_Leafarea(control, tlu, tnleaf, lfnc, tmpa, rla,               & !Input 
-       gddcer, dtt, dvs, dvsrate, olg, swfac, gstdyrdoySim,                & !Input 
-       pla, lai, latf, lapot, greenla, greenlaAnth,                        & !Output
-       lamaxpot, lftips, lfcols, lfn, maxlarf, lflon, gddladur)              !Output
+  call MZ_AG_Leafarea(control, eop, ep, tlu, tnleaf, lfnc, tmpa, rla,   & !Input 
+       dvs, olg, gstdyrdoySim, swfac, turfac, agefac,                   & !Input 
+       pla, prlsen, xlai, xhlai, latf, lapot, greenla, greenlaSilk,     & !Output
+       lamaxpot, lftips, lfcols, lfn, maxlarf, lflon, tluladur)           !Output 
        
-  call MZ_AG_Photsynt(control, soilprop, weather, sw1,           & !Input
+  call MZ_AG_Photsynt(control, soilprop, weather, sw,            & !Input
        gddae, dvs, lfn, greenla, lflon, lamaxpot, lapot,         & !Input
        pgross, srad, parday, parsunday, parshday, radtotday)       !Output  
         
-!  call MZ_AG_Respiration(control, weather,                       & !Input
-!       dvs, wlvtop, wlvbot, wst, weolg, wrt, cgrw,               & !Input
-!       maint)                                                      !Output
+  call MZ_AG_Respiration(control, weather,                       & !Input
+       dvs, wlvtop, wlvbot, wst, weolg, wrt, cgrw,               & !Input
+       maint)                                                      !Output
 
-  call MZ_AG_RespirIXIM(control, weather,                      & !Input
-       pgross, wtmain, glv, grt, gst, egr, ggr,                & !Input
-       maint, cvf)                                               !Output
+!  call MZ_AG_RespirIXIM(control, weather,                      & !Input
+!       pgross, wtmain, glv, grt, gst, egr, ggr,                & !Input
+!       maint, cvf)                                               !Output
        
   call MZ_AG_PartCoefs(control, weather, yrplt,                  & !Input
        silk, tlu, dvs, olg, pstres,                              & !Input
        fr, fsts, flv, fvear)                                       !Output 
        
-  call MZ_AG_Growth(control, weather, iswitch, yrplt, eop, trwup, dvs,       & !Input
-       olg, gstdyrdoySim, lai, pgross, maint, fr, fsts, flv, fvear,          & !Input
-       pstres, kn, grt, grort, gsh, glv, gst, egr, ggr, wrt, wlv, wlvtop,    & !Output
-       wlvbot, wsts, wstr, wst, we, weolg, grain, kw, tadrw, cgr, cgrf, cgrw,      & !Output
-       swfac, tadrwAnth, tadrwSilk, seedno, skerwt, stover, wtmain)            !Output 
-       
+  call MZ_AG_Growth(control, weather, iswitch, yrplt, eop, ep, trwup, dvs, tlu, olg, & !Input
+       gstdyrdoySim, xhlai, prlsen, pgross, maint, fr, fsts, flv, fvear, swfac, nstres,      & !Input
+       ndef3, pstres, kn, grt, grtplt, gsh, glv, gst, egr, ggr, wrt, wlv, wlvtop,    & !Output
+       wlvbot, wsts, wstr, wst, we, weolg, grain, kw, tadrw, cgr, cgrf, cgrw,        & !Output
+       tadrwAnth, tadrwSilk, seedno, skerwt, stover, wtmain, growth)                   !Output 
+
+  if(iswwat /= 'N') then       
   call MZ_AG_RootGro(control, SoilProp, iswitch, no3, nh4, sw, & !Input
-       growthStage, gstdyrdoySim, gddcer, dtt, grort, swfac,   & !Input                                   
+       growthStage, gstdyrdoySim, gddcer, dtt, grtplt, swfac,   & !Input                                   
        cumdep, rtdep, rlv)                                       !Output  
+  end if   
+  
+  if(iswnit /= 'N') then
+     call MZ_AG_NPlant(control, iswitch, weather, soilprop, sw, yrplt, mdate,     & !Input
+          xstage, growth, rlv, no3, nh4, gstdyrdoySim, growthStage, turfac, xhlai,       & !Input
+          senesce, rootn, stovn, ranc, tanc, trnu, nfac, agefac, ndef3,           & !Output
+          nstres, uno3, unh4, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, pcnl)    !Output       
+  else
+     nfac   = 1.0
+     agefac = 1.0
+     ndef3  = 1.0
+     nstres = 1.0               
+  end if     
+     
 end if
 
 !----------------------------------------------------------------------
@@ -217,40 +307,71 @@ end if
 !----------------------------------------------------------------------
 else if(dynamic == output) then
 
-  call MZ_AG_Opgrow(control, iswitch, yrplt, mdate, growthStage, gti, tlu, lfnum, tnleaf, & !Input
-       anthes, silk, olg, dvs, gddcer, rla, pla, lai, latf, greenla, gddten, gddapsim,    & !Input
-       lftips, lfcols, coltlu, elp, elt, maxlarf, lapot, gddladur, stLayer1, rlaSoil,     & !Input
-       rlaAir, pgross, maint, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr,     & !Input
-       wrt, wlv, wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf, cgrw, eop,   & !Input
-       trwup, swfac, rtdep, rlv, srad, parday, parsunday, parshday, radtotday)    
+  if(iswnit /= 'N') then
+     call MZ_AG_NPlant(control, iswitch, weather, soilprop, sw, yrplt, mdate,     & !Input
+          xstage, growth, rlv, no3, nh4, gstdyrdoySim, growthStage, turfac, xhlai,       & !Input
+          senesce, rootn, stovn, ranc, tanc, trnu, nfac, agefac, ndef3,           & !Output
+          nstres, uno3, unh4, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, pcnl)    !Output       
+  else
+     nfac   = 1.0
+     agefac = 1.0
+     ndef3  = 1.0
+     nstres = 1.0               
+  end if     
+  
+  call MZ_AG_Opgrow(control, iswitch, soilprop, yrplt, mdate, growthStage, gti, tlu, tnleafrm, tnleaf,  & !Input
+       anthes, silk, olg, dvs, gddcer, rla, pla, xhlai, latf, greenla, gddten, gddapsim,                & !Input
+       lftips, lfcols, coltlu, tnleafphot, tnleaftemp, maxlarf, lflon, tluladur, stLayer1, rlaSoil,     & !Input
+       rlaAir, pgross, maint, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr,                   & !Input
+       wrt, wlv, wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf, cgrw, eop,           & !Input
+       trwup, swfac, nstres, rtdep, rlv, srad, parday, parsunday, parshday, radtotday)    
        
   call MZ_AG_Opharv(control, iswitch, gstddoySim, gstdyearSim, growthtlu)
   
-  call MZ_AG_Opharv2(control, iswitch, yrplt, harvfrac, growthStage, mdate,              & !Input 
-       gstdyrdoySim, lai, tlu, tnleaf, lftips, greenla, greenlaAnth,                     & !Input
-       tadrwAnth, tadrwSilk, kn, seedno, we, skerwt, stover, swfac, tadrw, grain,        & !Input
-       bwah, sdwtah)                                                                       !Output
-
+  call MZ_AG_Opharv2(control, iswitch, yrplt, harvfrac, swfac, turfac, senesce,   & !Input
+       agefac, nstres, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, growthStage,  & !Input 
+       mdate, gstdyrdoySim, xhlai, tlu, tnleaf, greenla, greenlaSilk,             & !Input
+       tadrwAnth, tadrwSilk, kn, seedno, we, skerwt, stover, tadrw, grain,        & !Input
+       bwah, sdwtah)                                                                !Output
+                                                                             
   
 !----------------------------------------------------------------------
 ! Dynamic = seasend
 !----------------------------------------------------------------------
 else if(dynamic == seasend) then
 
-  call MZ_AG_Opgrow(control, iswitch, yrplt, mdate, growthStage, gti, tlu, lfnum, tnleaf, & !Input
-       anthes, silk, olg, dvs, gddcer, rla, pla, lai, latf, greenla, gddten, gddapsim,    & !Input
-       lftips, lfcols, coltlu, elp, elt, maxlarf, lapot, gddladur, stLayer1, rlaSoil,     & !Input
-       rlaAir, pgross, maint, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr,     & !Input
-       wrt, wlv, wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf,cgrw, eop,   & !Input
-       trwup, swfac, rtdep, rlv, srad, parday, parsunday, parshday, radtotday)    
+  if(iswnit /= 'N') then
+     call MZ_AG_NPlant(control, iswitch, weather, soilprop, sw, yrplt, mdate,     & !Input
+          xstage, growth, rlv, no3, nh4, gstdyrdoySim, growthStage, turfac, xhlai,      & !Input
+          senesce, rootn, stovn, ranc, tanc, trnu, nfac, agefac, ndef3,           & !Output
+          nstres, uno3, unh4, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, pcnl)    !Output       
+  else
+     nfac   = 1.0
+     agefac = 1.0
+     ndef3  = 1.0
+     nstres = 1.0               
+  end if       
+ 
+  call MZ_AG_Opgrow(control, iswitch, soilprop, yrplt, mdate, growthStage, gti, tlu, tnleafrm, tnleaf,  & !Input
+       anthes, silk, olg, dvs, gddcer, rla, pla, xhlai, latf, greenla, gddten, gddapsim,                & !Input
+       lftips, lfcols, coltlu, tnleafphot, tnleaftemp, maxlarf, lflon, tluladur, stLayer1, rlaSoil,     & !Input
+       rlaAir, pgross, maint, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr,                   & !Input
+       wrt, wlv, wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf,cgrw, eop,            & !Input
+       trwup, swfac, nstres, rtdep, rlv, srad, parday, parsunday, parshday, radtotday)    
        
   call MZ_AG_Opharv(control, iswitch, gstddoySim, gstdyearSim, growthtlu)
   
-  call MZ_AG_Opharv2(control, iswitch, yrplt, harvfrac, growthStage, mdate,              & !Input 
-       gstdyrdoySim, lai, tlu, tnleaf, lftips, greenla, greenlaAnth,                     & !Input
-       tadrwAnth, tadrwSilk, kn, seedno, we, skerwt, stover, swfac, tadrw, grain,        & !Input
-       bwah, sdwtah)                                                                       !Output
-    
+  call MZ_AG_Opharv2(control, iswitch, yrplt, harvfrac, swfac, turfac, senesce,   & !Input
+       agefac, nstres, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn, growthStage,  & !Input 
+       mdate, gstdyrdoySim, xhlai, tlu, tnleaf, greenla, greenlaSilk,             & !Input
+       tadrwAnth, tadrwSilk, kn, seedno, we, skerwt, stover, tadrw, grain,        & !Input
+       bwah, sdwtah)                                                                !Output
+       
+  ! Copy daily output file to filex's directory
+  call copy_file('*.OUT', trim(pathex))
+  !call copy_file(outaltmz, trim(pathex)//outaltmz)
+
+  
 !-----------------------------------------------------------------------
 ! End of dynamic if structure
 !-----------------------------------------------------------------------
@@ -264,7 +385,7 @@ end subroutine MZ_AG_AGMAIZE
      
 
 !==============================================================================================================================
-! Subroutine and module definitions!
+! Subroutine and module definitions
 !------------------------------------------------------------------------------------------------------------------------------
 ! ModuleDefs          Contains definitions of global constants and variables and contructed variables
 ! ModuleData          Contains definitions of constructed variables and interface subroutines for storing and retrieving data
@@ -297,8 +418,6 @@ end subroutine MZ_AG_AGMAIZE
 !                  rate=3 for rate calculations, integr=4 for integration of state variables, output=5 for
 !                  writing daily outputs, seasend=6 for closing output files                                 
 ! egr	           Ear growth rate	                                                                          kg[dm]/ha/day
-! elp              Change in leaf number due to photoperiod                                                   leaves 
-! elt              Change in leaf number due to temperature                                                   leaves    
 ! eop              Potential plant transpiration                                                              mm/day
 ! flv              Proportion of assimilates partitioned to leaves                                            fraction
 ! fvear	           Effect of stage of development on partitioning to non-grain ear part                       fraction
@@ -307,16 +426,15 @@ end subroutine MZ_AG_AGMAIZE
 ! gddae            Cumulative daily thermal time after emergence (CERES method)                               degree-day
 ! gddapsim         Cumulative daily thermal time after planting using APSIM's approach                        degree-day
 ! gddcer           Cumulative daily thermal time after planting (CERES method)                                degree-day                                                            
-! gddladur         Duration of leaf expansion                                                                 degree-day
 ! gddten           Cumulative daily thermal time after planting using GDD[10,30]                              degree-day
 ! ggr	           Grain growth rate	                                                                      kg[dm]/ha/day
 ! glv	           Growth rate of leaves' dry matter	                                                      kg[dm]/ha/day
 ! grain	           Grain dry matter	                                                                          kg[dm]/ha
 ! greenla(i)       Cumulative area of leaf i during expansion and senescence                                  m2/leaf
-! grort            Root growth rate                                                                           g/plant/day
 ! growthStage      Integer value of growth stage
 ! growthtlu(i)     Leaf stage at which growth stage i occurred                                                tlu
 ! grt	           Growth rate of root dry matter	                                                          kg[dm]/ha/day
+! grtplt            Root growth rate                                                                           g/plant/day
 ! gsh	           Growth rate of vegetative components of shoot	                                          kg[dm]/ha/day
 ! gst	           Growth of stem dry matter	                                                              kg[dm]/ha/day
 ! gstddoySim(i)    Component day of year of gstdyrdoySim                                                      ddd
@@ -326,7 +444,6 @@ end subroutine MZ_AG_AGMAIZE
 ! iswitch          Constructed type for control switches
 ! kn               Kernel number                                                                              kernel/plant
 ! kw	           Kernel weight 	                                                                          mg/kernel
-! lai              Whole-plant leaf area index                                                                m2[leaf]/m2[ground]
 ! lamaxpot(i)      Maximum area of leaf i under non-stressed conditions                                       m2/leaf
 ! lapot(i)         Cumulative area of leaf i during expansion (tip to collar) under non-stressed conditions   m2/leaf
 ! latf             Effect of temperature on leaf growth
@@ -355,12 +472,14 @@ end subroutine MZ_AG_AGMAIZE
 ! st(l)            Soil temperature in soil layer l                                                           degree C
 ! stLayer1         Soil temperature of layer 1                                                                degree C
 ! sw(l)            Volumetric soil water content in layer l                                                   cm3[water]/cm3[soil]
-! sw1              Volumetric soil water content in first layer                                               cm3[water]/cm3[soil]
 ! swfac            Soil water stress effect on growth (0-1), 1 is no stress, 0 is full 
 ! tadrw	           Total above ground dry weight	                                                          kg[dm]/ha
 ! tlu              Thermal leaf unit (cumulative rate of leaf tip appearance)                                 tlu
+! tluladur         Duration of leaf expansion                                                                 tlu
 ! tmpa             Daily mean air temperature                                                                 degree C
 ! tnleaf           Total number of initiated leaves                                                           leaves
+! tnleafphot       Change in leaf number due to photoperiod                                                   leaves 
+! tnleaftemp       Change in leaf number due to temperature                                                   leaves    
 ! trwup            Total potential daily root water uptake                                                    cm/day
 ! we	           Weight of ears	                                                                          kg[dm]/ha
 ! weather          Constructed type for weather variables
@@ -373,5 +492,6 @@ end subroutine MZ_AG_AGMAIZE
 ! wstr	           Weight of (temporarily-stored) stem reserves                                               kg[sucrose]/ha
 ! wsts	           Weight of structural stem 	                                                              kg[dm]/ha
 ! wtmain
+! xhlai            Whole-plant leaf area index                                                                m2[leaf]/m2[ground]
 ! yrplt            Planting date                                                                              yyyyddd
 !==============================================================================================================================

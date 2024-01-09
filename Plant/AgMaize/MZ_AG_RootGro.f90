@@ -26,7 +26,7 @@
 subroutine MZ_AG_RootGro(control, SoilProp, iswitch,          & !Control
        no3, nh4, sw,                                          & !MZ_GLOBAL
        growthStage, gstdyrdoySim, gddcer, dtt,                & !From Phenology
-       grort,                                                 & !From Growth
+       grtplt,                                                & !From Growth
        swfac,                                                 & !From WFactor
        cumdep, rtdep, rlv)                                      !Output
 !----------------------------------------------------------------------
@@ -37,7 +37,7 @@ save
 !----------------------------------------------------------------------
 character :: iswnit*1, files*12, pathsr*80
 integer :: dynamic, nlayr, yrdoy, growthStage, gstdyrdoySim(20)
-real :: gddcer, dtt, grort, swfac
+real :: gddcer, dtt, grtplt, swfac
 real, dimension (nl) :: ds, dlayr, ll, dul, sat, sw, esw, nh4, no3, rldf, shf   
 
 ! Variables obtained locally
@@ -68,7 +68,6 @@ shf     = SoilProp % wr
 iswnit  = iswitch % iswnit
 !iswwat  = iswitch % iswwat
 
-
 !----------------------------------------------------------------------
 ! Dynamic = runinit or seasinit
 !----------------------------------------------------------------------
@@ -87,14 +86,13 @@ pormin = dataspecies % pormin
 rlwr   = dataspecies % rlwr
 
 depmax = ds(nlayr) 
-esw   = (/ (dul(l)-ll(l), l=1,nl) /)
-rldf  = 0.0
-rlv   = 0.0
-rtdep = 0.0
-rnlf  = 0.0
-rnfac = 0.0
-rlnew = 0.0
-swfac = 1.0
+esw    = dul - ll
+rldf   = 0.0
+rlv    = 0.0
+rtdep  = 0.0
+rnlf   = 0.0
+rnfac  = 0.0
+rlnew  = 0.0
 cumdep = 0.0
 
 !----------------------------------------------------------------------
@@ -103,10 +101,10 @@ cumdep = 0.0
 elseif(dynamic==integr) then
 
 !---Before emergence set the root depth to the sowing depth
-if(growthStage==1) rtdep = sdepth         
+if(growthStage==1 .AND. rtdep==0.0) rtdep = sdepth         
 
 !---Initialize root depth and root length volume at emergence    
-if(growthStage==2) rtdep = rtdep + 0.15*dtt
+!if(growthStage==2) rtdep = rtdep + 0.15*dtt
 !Q. Replace this whole section with CROPGRO's approach
 !KAD: For each layer with root presence at emergence, compute RLV. The last layer with
 !root presence is probably incompletely explored so find the fraction of that layer
@@ -116,17 +114,17 @@ if(yrdoy==gstdyrdoySim(2)) then      !On the day of emergence
     cumdep = 0.0
     do l = 1, nlayr
        cumdep = cumdep + dlayr(l)
-       rlv(l) = 0.20*pltpop/dlayr(l)
+       rlv(l) = (0.15 * pltpop * rlwr)/dlayr(l)      !KJB Using a grtplt of 0.15 g/plt at emergence
        if(cumdep > rtdep) exit
     end do
 
     rlv(l) = rlv(l)*(1.0-(cumdep-rtdep)/dlayr(l))
     l1 = l + 1
-    if(l1 < nlayr) rlv = (/ (0.0, l=l1,nlayr) /)
+    if(l1 < nlayr) rlv(l1:nlayr) = 0.0
 end if
 
 !---KAD: New root length
-if(grort <= 1.E-4) return
+if(grtplt <= 1.E-4) return
 !KAD: Q. Check- Should the program be allowed to proceed before emergence?
 !KAD: Q. Need to add some conditions regarding water stress
 
@@ -134,7 +132,7 @@ if(grort <= 1.E-4) return
 !the uncertainty of the value and the uncertainty of loss of assimilate by exudation and respiration.
 !A compromise value of 0.98 was choosen for all crops.
 !Calculate new root length to be added to the total root system length, cm. root cm2 ground
-rlnew = grort * pltpop * rlwr
+rlnew = grtplt * pltpop * rlwr
 ! cm[roots]          g[roots]   plt   m2[ground]*cm[roots]
 ! ---------------- = -------- * --- * ---------------------
 ! cm2[ground]*day    plt*day    m2    cm2[ground]*g[roots]
@@ -191,11 +189,11 @@ rtsurv = min(1.0,(1.-rtexf*(1.-swexf)))
 !is 10 to 20% of the daily thermal time accumulated by the plant limited by maximum depth of soil so, setting
 !soil depth correctly is crucial to the simulation of water stress.
 ! WDB 10/22/03
-if(gddcer < 275.0) then             ! JTR 6/17/94
-   rtdep = rtdep + dtt*0.1*sqrt(shf(l)*amin1(swfac*2.0,swdf))
-else
-   rtdep = rtdep + dtt*0.2*sqrt(shf(l)*amin1(swfac*2.0,swdf))
-endif
+!if(gddcer < 275.0) then             ! JTR 6/17/94
+!   rtdep = rtdep + dtt*0.1*sqrt(shf(l)*amin1(swfac*2.0,swdf))
+!else
+rtdep = rtdep + dtt*0.2*sqrt(shf(l)*amin1(swfac*2.0,swdf))
+!endif
 rtdep = amin1(rtdep, depmax)       
                      
 !---A root length density factor used to calculate new root growth distribution (unitless)
@@ -251,8 +249,8 @@ end subroutine MZ_AG_RootGro
 ! esw(l)           Extractable water in soil layer l                                                         cm
 ! files            Species file name
 ! gddcer           Cumulative daily thermal time after planting (CERES method)                               degree-day                                                            
-! grort            Root growth rate                                                                          g/plant/day
 ! growthStage      Integer value of growth stage
+! grtplt            Root growth rate                                                                          g/plant/day
 ! gstdyrdoySim(i)  Simulated year and day of year for growth stage i                                         yyyyddd
 ! istage           Crop growth stage (1-9)
 ! iswnit           Switch indicating if soil nitrogen balance is on (Y/N)

@@ -20,10 +20,10 @@
 ! -Data for the equations mentioned above
 ! -Temperature effect for curvature parameter in MZ_GM_PSParam tair**2 instead of tair*2
 !=======================================================================
-subroutine MZ_AG_Iphotsynt(dynamic,                      & !Control
-     asmax, gddae, gla, plaisl, plaish, lap, lfl, lfn,   & !Input
-     light, parsh, parsun, tairh, yx,                    & !Input
-     pghr)                                                 !Output
+subroutine MZ_AG_Iphotsynt(dynamic,                            & !Control
+     tmin, asmax, gddae, gla, plaisl, plaish, lap, lfl, lfn,   & !Input
+     light, parsh, parsun, tairh, yx, sgfun, gasfn,            & !Input
+     pghr)                                                       !Output
 
 use ModuleDefs
 implicit none
@@ -31,7 +31,7 @@ save
 
 logical :: light
 integer :: dynamic, i, lfn
-real :: asmax, gddae, pghr, pgsum, pgsun, tairh
+real :: asmax, gddae, pghr, pgsum, pgsun, tairh, sgfun, gasfn, tmin
 real,dimension(50) :: assat, cvxty, gla, intslp, lap, lfl, parsh, parsun, pgsh, pgsl, plaish, plaisl, yx 
 
 !----------------------------------------------------------------------
@@ -47,10 +47,9 @@ pgsun = 0.0
 pgsh  = 0.0
 pgsl  = 0.0
 
-call MZ_AG_PSParam(dynamic,                                & !Control
-     asmax, gddae, gla, lap, lfl, lfn, light, tairh, yx,   & !Input
-     assat, cvxty, intslp)                                   !Output 
-
+call MZ_AG_PSParam(dynamic, tmin, asmax, gddae, gla, lap, lfl, lfn, light, tairh, yx, sgfun, gasfn,  & !Input
+                   assat, cvxty, intslp)                                                               !Output 
+                   
 !-----------------------------------------------------------------------
 ! Dynamic = rate 
 !-----------------------------------------------------------------------
@@ -63,8 +62,8 @@ else if(dynamic==rate) then
 else if(dynamic==integr) then
 
 ! JIL Calculate light response curve parameters per leaf as a function of leaf age and hourly air temperature
-call MZ_AG_PSParam(dynamic, asmax, gddae, gla, lap, lfl, lfn, light, tairh, yx,    & !Input
-                   assat, cvxty, intslp)                                             !Output 
+call MZ_AG_PSParam(dynamic, tmin, asmax, gddae, gla, lap, lfl, lfn, light, tairh, yx, sgfun, gasfn,  & !Input
+                   assat, cvxty, intslp)                                                               !Output 
 
 ! Calculate per-leaf assimilation
 pghr = 0.0
@@ -137,8 +136,8 @@ end subroutine MZ_AG_Iphotsynt
 !  Called from: Iphotsynt
 !  Calls:       
 !=======================================================================
-subroutine MZ_AG_PSParam(dynamic, asmax, gddae, gla, lap, lfl, lfn, light, tairh, yx,    & !Input
-                         assat, cvxty, intslp)                                             !Output 
+subroutine MZ_AG_PSParam(dynamic, tmin, asmax, gddae, gla, lap, lfl, lfn, light, tairh, yx, sgfun, gasfn,  & !Input
+                         assat, cvxty, intslp)                                                               !Output 
 
 use ModuleDefs
 implicit none
@@ -146,7 +145,7 @@ save
 
 integer :: dynamic, i, lfn
 logical :: light
-real :: asf, ak, asmax, axx, axz, ayz, ck, cx, cxf, cxz, exponent, gddae, isf, tairh, xx
+real :: asf, asfn, gasfn, tmin, ak, asmax, axx, axz, ayz, ck, cx, cxf, cxz, exponent, gddae, isf, tairh, xx, sgfun
 real,dimension(50) :: apk, asat, assat, cvty, cvxty, gla, insl, intslp, lap, lfl, yx
 
 !----------------------------------------------------------------------
@@ -156,6 +155,7 @@ if(dynamic==runinit .or. dynamic==seasinit) then
 
 ! Initialize
   asf    = 0.0
+  asfn   = 1.0
   ak     = 0.0
   axx    = 0.0
   axz    = 0.0
@@ -214,7 +214,7 @@ do i = 1, lfn
       ayz = 0.18
       axx = 0.85
       ak = -7.0
-      axz = 0.47
+      axz = sgfun     !TT 08/06/2014
       cx = 0.95
       ck = -16.7
       cxz = 0.88
@@ -246,8 +246,15 @@ asf = 0.0886 - 0.00867*tairh + 0.002840*tairh**2.0 - 0.00005070*tairh**3.0
 isf = 0.6783 + 0.02910*tairh - 0.000756*tairh**2.0 + 0.00000513*tairh**3.0
 cxf = 1.0108 - 0.00050*tairh - 0.000010*tairh**2.0 + 0.00000050*tairh**3.0
 
+! Relative effect of night temperature < 10C on assat (Dwyer and Tollenaar, 1989 - CJPS 69,81; Ying et al. 2000 - FCR 68,87; Ying et al., 2002 - Crop Sci. 42,1164)
+if(tmin < 10.) then
+    asfn = 1./exp(gasfn*(10.-tmin))
+else
+    asfn = 1.
+end if    
+
 do i = 1, lfn
-   assat(i)  = asat(i)*asf*1.0
+   assat(i)  = asat(i)*asf*asfn*1.0
    intslp(i) = insl(i)*isf*1.0	
    cvxty(i)  = cvty(i)*cxf*1.0
 end do
@@ -266,6 +273,7 @@ end	subroutine MZ_AG_PSParam
 !              and leaf age
 ! apk(l)       Cumulative thermal time after emergence when expansion of leaf l was completed           degree-days
 ! asf          Relative effect of temperature on the light-saturated assimilation rate                  -
+! asfn         Relative effect of night temperature on the light-saturated assimilation rate
 ! asat(l)      Light-saturated assimilation rate for leaf l (no temperature effect applied)             umol[CO2]/m2[leaf]/s
 ! asmax        Maximum instantaneous assimilation at 30 degC                                            µmol[CO2]/m2[leaf]/s
 ! assat(l)     Light-saturated assimilation rate (corresponds to the asymptote of the light             µmol[CO2]/m2[leaf]/s
@@ -286,6 +294,8 @@ end	subroutine MZ_AG_PSParam
 !              parameter for the light response curve) for leaf l
 ! dynamic      Main control variable to tell each module which section of code to run                   -
 ! exponent     Intermediary variable
+! gasfn        Genotype coefficient for effect of low (<10C) night temperatutres on leaf photosynthesis 
+!              (varies from 0.03 to 0.07 for newer to older hybrids)
 ! gddae        Cumulative growing degree days after emergence                                           degree-days
 ! gla(l)       Green leaf area for leaf l                                                               cm2
 ! i            Iteration counter of leaf number                                                         -

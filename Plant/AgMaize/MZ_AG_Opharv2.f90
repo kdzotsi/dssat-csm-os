@@ -16,13 +16,19 @@
 !  02/09/2007 GH  Add path for FileA
 !  08/28/2009 CHP added EDAT, EDAP 
 !  10/01/2013 KAD Adapted for AgMaize
+! 
+!  TODO:
+!  - Is Overview.OUT's interpretation of SNAM 'Stem N at maturity' correct?
+!    I think SNAM (observed value) is being compared to stover N (simulated)
+!    instead, change simulated value to stem N?
 !=======================================================================
 
 subroutine MZ_AG_Opharv2(control, iswitch,                                      & !Control inputs
-    yrplt, harvfrac,                                                            & !Inputs from MZ_GM_GLOBAL
+    yrplt, harvfrac, swfac, turfac,                                             & !Inputs from MZ_AG_AGMAIZE
+    senesce, agefac, nstres, wtnvg, cannaa, wtnsd, wtncan, wtnup, pcngrn,       & !Inputs from NPlant
     growthStage, mdate, gstdyrdoySim,                                           & !Inputs from Phenology
-    lai, tlu, tnleaf, lftips, greenla, greenlaSilk,                             & !Inputs from Leaf Area
-    tadrwAnth, tadrwSilk, kn, seedno, we, skerwt, stover, swfac, tadrw, grain,  & !Inputs from Growth
+    xhlai, tlu, tnleaf, greenla, greenlaSilk,                                   & !Inputs from Leaf Area
+    tadrwAnth, tadrwSilk, kn, seedno, we, skerwt, stover, tadrw, grain,         & !Inputs from Growth
     bwah, sdwtah)                                                                 !Output
 
 !-----------------------------------------------------------------------
@@ -31,24 +37,16 @@ use MZ_AG_ModuleDefs
 implicit none
 save
 !-----------------------------------------------------------------------
-!! Check units
-!From Growth: canwaa=tadrwSilk, gpp=kn, gpsm=seedno, podwt=we, seedno=seedno, skerwt=skerwt, stover=stover, swfac=swfac, topwt=tadrw, yield=grain
-!From LAI: xlai, xn=tnleaf
-!From Phenology: isdate=endleafgrowth, istage=growthstage, mdate, stgdoy, yremrg=emerg
-!From GLOBAL through plant.for: harvfrac, yrplt
-
-character :: ideto*1, idets*1, iplti*1, rnmode*1, crop*2, stname*10(20), filea*12, pathex*80
-integer :: demrg, dflr, dsilk, dmilk, dmat, ifpd, dfpd, ifsd, dfsd, dnr0, dnr1, dnr2, dnr3, dnr7, dynamic
-integer :: iemrg, iflr, imat, isens, isilk, imilk, mdate, growthStage, run, timdif, lfmax, found
-integer :: trtnum, yrnr1, yrnr2, yrnr3, yrnr5, yrdoy, yrsim, yrplt, trt_rot, gstdyrdoySim(20)
 real, parameter :: cm2tom2=1E-4  
-real :: agefac, aptnup, bwah, bwam, cannaa, tadrwAnth, tadrwSilk, gnup, kn, hi, StovSenes, maxlai, greenla(50) 
-real :: greenlaSilk(50), nstres, we, psdwt, Pstres1, Pstres2, sdrate, sdwt, sdwtah, harvfrac(2)
-real :: sdwtam, pltpop, laitop, seedno, skerwt, stover, swfac, tadrw, turfac, wtncan, wtnup, xgnp, lai, lftips
-real :: grain, tlu, tnleaf
+character :: ideto*1, idets*1, iplti*1, rnmode*1, crop*2, stname*10(20), filea*12, pathex*80, desclist*6(5)
+integer ::  growthStage, run, timdif, lfmax, i, j, igst,iobsdat, ilist(5), glist(5), dsimdat(5), dobsdat(5)
+integer :: dynamic, isens, found, mdate, trtnum, yrdoy, yrsim, yrplt, trt_rot, gstdyrdoySim(20)
+real :: agefac, wtnvg, bwah, bwam, cannaa, tadrwAnth, tadrwSilk, wtnsd, kn, hi, StovSenes, maxlai, greenla(50) 
+real :: greenlaSilk(50), nstres, we, psdwt, Pstres1, Pstres2, sdrate, sdwt, sdwtah, harvfrac(2), grain, tlu, tnleaf, nleaf
+real :: sdwtam, pltpop, laitop, seedno, skerwt, stover, swfac, tadrw, turfac, wtncan, wtnup, pcngrn, xhlai
 
 ! Arrays which contain data for printing in SUMMARY.OUT file
-integer, parameter :: sumnum = 17
+integer, parameter :: sumnum = 18
 character*4, dimension(sumnum) :: label
 real, dimension(sumnum) :: value
 
@@ -72,10 +70,10 @@ crop    = control % crop
 yrsim   = control % yrsim
 rnmode  = control % rnmode
 run     = control % run
+yrdoy   = control % yrdoy
 iplti   = iswitch % iplti
 ideto   = iswitch % ideto
 idets   = iswitch % idets
-senesce % ResWt = 0.0             !KAD: Not using yet
 StovSenes = senesce % ResWt(0)
 
 !-----------------------------------------------------------------------
@@ -83,36 +81,32 @@ acount = 26  !Number of FILEA headings.
 
 ! Headings in FILEA for Measured data
 data olab /    & 
- 'ADAT  ',     & !1  DFLR 
- 'PD1T  ',     & !2  IFPD 
- 'PDFT  ',     & !3  IFSD 
- 'MDAT  ',     & !4  DMAT 
- 'HWAM  ',     & !5  XGWT 
- 'PWAM  ',     & !6  XPDW 
- 'H#AM  ',     & !7  XNOGR
- 'HWUM  ',     & !8  XGWU 
- 'H#UM  ',     & !9  XNOGU
- 'CWAM  ',     & !10 XCWT 
-
-! 08/11/2005 CHP
-! Change BWAH to BWAM -- by-product produced to maturity, but not necessarily removed from field
-! 'BWAH',      & !11 XSWT 
- 'BWAM  ',     & !11 XSWT 
- 'LAIX  ',     & !12 XLAM 
- 'HIAM  ',     & !13 XHIN 
- 'THAM  ',     & !14 XTHR 
- 'GNAM  ',     & !15 XNGR 
- 'CNAM  ',     & !16 XNTP 
- 'SNAM  ',     & !17 XNST 
- 'GN%M  ',     & !18 XNPS 
- 'CWAA  ',     & !19 XCWAA
- 'CNAA  ',     & !20 XCNAA
- 'L#SM  ',     & !21 XLFNO
- 'LAIT  ',     & !22 LAI of top 7 leaves
- 'EDAT  ',     & !23 Emergence date
- 'LDAT  ',     & !24 Silking date
- 'KDAT  ',     & !25 Milk line date
- 'CWAS  ',     & !26 CWAS
+ 'EDAT  ',     & !1  Emergence date
+ 'ADAT  ',     & !2  DANTH
+ 'LDAT  ',     & !3  Silking date
+ 'KDAT  ',     & !4  Milk line date 
+ 'PD1T  ',     & !5  IFPD 
+ 'PDFT  ',     & !6  IFSD 
+ 'MDAT  ',     & !7  DMAT Maturity date
+ 'HWAM  ',     & !8  XGWT 
+ 'PWAM  ',     & !9  XPDW 
+ 'H#AM  ',     & !10 XNOGR
+ 'HWUM  ',     & !11 XGWU 
+ 'H#UM  ',     & !12 XNOGU
+ 'CWAM  ',     & !13 XCWT
+ 'BWAM  ',     & !14 XSWT 
+ 'LAIX  ',     & !15 XLAM 
+ 'LAIT  ',     & !16 LAI of top 7 leaves
+ 'HIAM  ',     & !17 XHIN 
+ 'THAM  ',     & !18 XTHR 
+ 'GNAM  ',     & !19 XNGR 
+ 'CNAM  ',     & !20 XNTP 
+ 'SNAM  ',     & !21 XNST 
+ 'GN%M  ',     & !22 XNPS 
+ 'CWAA  ',     & !23 XCWAA
+ 'CWAS  ',     & !24 CWAS
+ 'CNAA  ',     & !25 XCNAA
+ 'L#SM  ',     & !26 XLFNO
   14*'      '/  
  
 !-----------------------------------------------------------------------
@@ -138,6 +132,8 @@ data stname /     & !Stage
   '          ',   & !19
   'Harvest   '/     !20
 
+  nleaf = min(tlu, tnleaf)
+
 !***********************************************************************
 !***********************************************************************
 !     RUN INITIALIZATION
@@ -146,17 +142,8 @@ if(dynamic == runinit) then
 !-----------------------------------------------------------------------
 
 ! Variables not currently calculated
-agefac = 1.0
-aptnup = 0.0
-cannaa = 0.0
-gnup   = 0.0
-nstres = 1.0
 pstres1 = 1.0
 pstres2 = 1.0
-turfac  = 1.0
-wtncan  = 0.0
-wtnup   = 0.0
-xgnp    = 0.0
 
 !Read fileio case 'FILENP' and transfer variables
 call readfileio(control, 'FILENP', datafileio)
@@ -172,9 +159,9 @@ pltpop = datafileio % pltpop
 call getdesc(acount, olab, descrip)
 olap = olab
 
-call Opview(control, tadrw, acount, descrip, ideto, lftips,  & 
+call Opview(control, tadrw, acount, descrip, ideto, nleaf,   & 
      measured, plantstres, simulated, gstdyrdoySim,          &
-     stname, wtncan, lai, nint(grain), yrplt, growthStage)
+     stname, wtncan, xhlai, nint(grain), yrplt, growthStage)
 
 !***********************************************************************
 !***********************************************************************
@@ -186,8 +173,8 @@ Simulated = ' '
 Measured  = ' '
 
 ! Establish # and names of stages for environmental & stress summary
-plantstres % active = .false.
-plantstres % nstages = 5
+Plantstres % active = .FALSE.
+Plantstres % nstages = 5
 
 PlantStres % StageName(0) = 'Planting to Harvest    '
 PlantStres % StageName(1) = 'Emegence-Tassel Init   '
@@ -196,9 +183,9 @@ PlantStres % StageName(3) = 'Topmost leaf-Silking   '
 PlantStres % StageName(4) = 'Silking-Beg Lin Gr Fill'
 PlantStres % StageName(5) = 'Beg Lin Gr Fill-Blk Lyr'
 
-call Opview(control, tadrw, acount, descrip, ideto, lftips,   &
+call Opview(control, tadrw, acount, descrip, ideto, nleaf,    &
      measured, plantstres, simulated, gstdyrdoySim,           &
-     stname, wtncan, lai, nint(grain), yrplt, growthStage)
+     stname, wtncan, xhlai, nint(grain), yrplt, growthStage)
 
 maxlai = 0.0
 
@@ -209,38 +196,39 @@ maxlai = 0.0
 !***********************************************************************
 else if(dynamic == output) then
 !-----------------------------------------------------------------------
-maxlai = amax1(maxlai, lai)      !Maximum lai season
+maxlai = amax1(maxlai, xhlai)      !Maximum lai season
 
 PlantStres % W_grow = turfac 
-PlantStres % W_phot = swfac  
-PlantStres % N_grow = agefac 
-PlantStres % N_phot = nstres 
+PlantStres % W_phot = swfac 
+ 
+PlantStres % N_grow = nstres    !Growth 
+PlantStres % N_phot = agefac    !Leaf area expansion
+
 PlantStres % P_grow = pstres2
 PlantStres % P_phot = pstres1
-PlantStres % active = .false.
+PlantStres % active = .FALSE.
 
 !if(growthStage > 0 .AND. growthStage < 6) then
-!  Plantstres % active(growthStage) = .true.
+!  Plantstres % active(growthStage) = .TRUE.
 !endif
 !KAD 10/08/2013- Do not want to add more phases to PlantStres so, here I am manually combining
 !AgMaize's phenological phases to match the maximum number of 5 stages shown in OVERVIEW.OUT
-if(growthStage==2 .OR. growthStage==3) Plantstres % active(1) = .true.    !Emergence to Tassel Initiation
-if(growthStage==4) Plantstres % active(2) = .true.                        !Tassel Initiation to Appearance of topmost leaf
-if(growthStage==5 .OR. growthStage==6) Plantstres % active(3) = .true.    !Appearance of topmost leaf to Silking
-if(growthStage==7) Plantstres % active(4) = .true.                        !Silking to Onset of Linear Grain Filling
-if(growthStage==8 .OR. growthStage==9) Plantstres % active(5) = .true.    !Onset of Linear Grain Filling to Black Layer
+if(growthStage==2 .OR. growthStage==3) Plantstres % active(1) = .TRUE.    !Emergence to Tassel Initiation
+if(growthStage==4)                     Plantstres % active(2) = .TRUE.    !Tassel Initiation to Appearance of topmost leaf
+if(growthStage==5 .OR. growthStage==6) Plantstres % active(3) = .TRUE.    !Appearance of topmost leaf to Silking
+if(growthStage==7)                     Plantstres % active(4) = .TRUE.    !Silking to Onset of Linear Grain Filling
+if(growthStage==8 .OR. growthStage==9) Plantstres % active(5) = .TRUE.    !Onset of Linear Grain Filling to Black Layer
 
-yrdoy = control % yrdoy
 if(yrdoy >= yrplt) then
    if(mdate < 0 .OR. (mdate > 0 .AND. yrdoy < mdate)) then
-      PlantStres % active(0) = .true.
+      PlantStres % active(0) = .TRUE.
    endif
 endif
 
 ! Send data to Overview.out data on days where stages occur
-call Opview(control, tadrw, acount, descrip, ideto, lftips,   &
+call Opview(control, tadrw, acount, descrip, ideto, nleaf,    &
      measured, plantstres, simulated, gstdyrdoySim,           &
-     stname, wtncan, lai, nint(grain), yrplt, growthStage)
+     stname, wtncan, xhlai, nint(grain), yrplt, growthStage)
 
 !***********************************************************************
 !***********************************************************************
@@ -248,17 +236,10 @@ call Opview(control, tadrw, acount, descrip, ideto, lftips,   &
 !***********************************************************************
 else if(dynamic == seasend) then
 !-----------------------------------------------------------------------
-! Transfer dates for model stages.
-yrnr1  = gstdyrdoySim(6)
-!yrnr1  = isdate
-!yrnr2  = gstdyrdoySim(7)
-!yrnr3  = gstdyrdoySim(3)
-!yrnr5  = gstdyrdoySim(5)
-!wtnsd  = gnup  /10.0
 
 !-----------------------------------------------------------------------
 ! Calculate variables for output
-! update nitrogen and residue applications after routines have been
+! Update nitrogen and residue applications after routines have been
 ! modified to handle automatic management
 !-----------------------------------------------------------------------
 if(seedno > 0.0) then
@@ -284,10 +265,8 @@ sdwtam = sdwt
 sdwtah = sdwt * harvfrac(1)
 
 !-----------------------------------------------------------------------
-! Actual byproduct harvested (default is 0 %)
-! Byproduct not harvested is incorporated
-! 08/11/2005 Senesced leaf and stem stay on plant and are
-! available for by-product harvest.
+! Actual byproduct harvested (default is 0 %). Byproduct not harvested is incorporated
+! 08/11/2005 Senesced leaf and stem stay on plant and are available for by-product harvest.
 !-----------------------------------------------------------------------
 bwam = stover + stovsenes
 bwah = (stover + stovsenes) * harvfrac(2) 
@@ -302,140 +281,63 @@ if((ideto == 'Y' .OR. index('IAEBCGDT',rnmode) > 0) .OR.   &
    end if
    call reada(filea, pathex, olab, trt_rot, yrsim, x)
    
-!-----------------------------------------------------------------------
-! Convert from YRDOY format to DAP.  Change descriptions to match.
-call reada_dates(x(1), yrsim, iflr)
-if(iflr > 0 .AND. iplti == 'R' .AND. isens == 0) then
-   dflr = timdif(yrplt, iflr)
-else
-  dflr  = -99
-end if
-olap(1) = 'ADAP  '
-call getdesc(1, olap(1), descrip(1))
+   !-----------------------------------------------------------------------
+   ! Convert from YRDOY format to DAP.  Change descriptions to match.
+   !Observed dates of phenological events
+   ilist = [1, 2, 3, 4, 7]   !List of indices in olab for variables to show in Overview.OUT
+   desclist = ['EDAP  ', 'ADAP  ', 'LDAP  ', 'KDAP  ', 'MDAP  ']  !Corresponding codes in DATA.CDE
+   do j = 1, size(ilist)
+      i = ilist(j) 
+      call reada_dates(x(i), yrsim, iobsdat)
+      if(iobsdat > 0 .AND. iplti == 'R' .AND. isens == 0) then
+         dobsdat(j) = timdif(yrplt, iobsdat)
+      else
+         dobsdat(j)  = -99
+      end if
+      olap(i) = desclist(j)
+      call getdesc(1, olap(i), descrip(i))
+   end do
 
-call reada_dates(x(2), yrsim, ifpd)
-if(ifpd > 0 .AND. iplti == 'R' .AND. isens == 0) then
-   dfpd = timdif(yrplt, ifpd)
-else
-   dfpd  = -99
-end if
-olap(2) = 'PD1P  '
-call getdesc(1, olap(2), descrip(2))
+   !Simulated dates of phenological events
+   !2=Emergence; 6=Anthesis; 7=Silking; 9=Milk line; 10=Black layer
+   glist = [2, 6, 7, 9, 10]      !List of growth stages to show in Overview.OUT
+   do j = 1, size(glist)
+      igst = glist(j)
+      dsimdat(j) = timdif(yrplt, gstdyrdoySim(igst))
+      if(dsimdat(j) <= 0 .OR. yrplt <= 0) dsimdat(j) = -99
+   end do
 
-call reada_dates(x(3), yrsim, ifsd)
-if(ifsd > 0 .and. iplti == 'R' .AND. isens == 0) then
-   dfsd = timdif(yrplt, ifsd)
-else
-   dfsd  = -99
-end if
-olap(3) = 'PDFP  '
-call getdesc(1, olap(3), descrip(3))
-
-call reada_dates(x(4), yrsim, imat)
-if(imat > 0 .AND. iplti == 'R' .AND. isens == 0) then
-   dmat = timdif(yrplt, imat)
-else
-   dmat  = -99
-end if
-olap(4) = 'MDAP  '
-call getdesc(1,olap(4), descrip(4))
-
-! 08/28/2009 CHP added EDAT, EDAP 
-call reada_dates(x(23), yrsim, iemrg)
-if(iemrg > 0 .AND. iplti == 'R' .AND. isens == 0) then
-   demrg = timdif(yrplt, iemrg)
-else
-   demrg  = -99
-end if
-olap(23) = 'EDAP  '
-call getdesc(1,olap(23), descrip(23))
-
-call reada_dates(x(24), yrsim, isilk)
-if(isilk > 0 .AND. iplti == 'R' .AND. isens == 0) then
-   dsilk = timdif(yrplt, isilk)
-else
-  dsilk  = -99
-end if
-olap(24) = 'LDAP  '
-call getdesc(1, olap(24), descrip(24))
-
-call reada_dates(x(25), yrsim, imilk)
-if(imilk > 0 .AND. iplti == 'R' .AND. isens == 0) then
-   dmilk = timdif(yrplt, imilk)
-else
-  dmilk  = -99
-end if
-olap(25) = 'KDAP  '
-call getdesc(1, olap(25), descrip(25))
-
-
-if(yrplt > 0) then
-   dnr1 = timdif(yrplt, gstdyrdoySim(6))
-   if(dnr1 <= 0) then
-      dnr1 = -99
-   end if
-else
-   dnr1 = -99
+   write(Simulated(1), '(i8)') dsimdat(1);       write(measured(1),'(i8)') dobsdat(1) !EDAT
+   write(Simulated(2), '(i8)') dsimdat(2);       write(measured(2),'(i8)') dobsdat(2) !ADAT
+   write(Simulated(3), '(i8)') dsimdat(3);       write(measured(3),'(i8)') dobsdat(3) !LDAT
+   write(Simulated(4), '(i8)') dsimdat(4);       write(measured(4),'(i8)') dobsdat(4) !KDAT
+   write(Simulated(5), '(i8)') -99;              write(measured(5), '(i8)') -99       !PD1T
+   write(Simulated(6), '(i8)') -99;              write(measured(6), '(i8)') -99       !PDFT
+   write(Simulated(7), '(i8)') dsimdat(5);       write(measured(7),'(i8)') dobsdat(5) !MDAT
+   write(Simulated(8), '(i8)') nint(grain);      write(measured(8), '(a8)') x(8)      !HWAM
+   write(simulated(9), '(i8)') -99 ;             write(measured(9), '(i8)') -99       !PWAM
+   write(simulated(10),'(i8)') nint(seedno);     write(measured(10), '(a8)') x(10)    !H#AM
+   write(simulated(11),'(f8.4)') skerwt;         write(measured(11), '(a8)') x(11)    !HWUM 
+   write(simulated(12),'(f8.1)') kn;             write(measured(12), '(a8)') x(12)    !H#UM 
+   write(simulated(13),'(i8)') nint(tadrw);      write(measured(13),'(a8)') x(13)     !CWAM
+   write(Simulated(14),'(i8)') nint(bwam);       write(measured(14),'(a8)') x(14)     !BWAM
+   write(Simulated(15),'(f8.2)') maxlai;         write(measured(15),'(a8)') x(15)     !LAIX
+   write(Simulated(16),'(f8.2)') laitop;         write(measured(16),'(i8)') -99       !LAIT
+   write(Simulated(17),'(f8.3)') hi;             write(measured(17),'(a8)') x(17)     !HIAM
+   write(Simulated(18),'(i8)') -99 ;             write(measured(18),'(i8)') -99       !THAM
+   write(Simulated(19),'(i8)') nint(wtnsd*10.);  write(measured(19),'(a8)') x(19)     !GNAM
+   write(Simulated(20),'(i8)') nint(wtncan*10.); write(measured(20),'(a8)') x(20)     !CNAM
+   write(Simulated(21),'(i8)') nint(wtnvg*10.);  write(measured(21),'(a8)') x(21)     !SNAM
+   write(Simulated(22),'(f8.1)') pcngrn;         write(measured(22),'(a8)') x(22)     !GN%M
+   write(Simulated(23),'(i8)') nint(tadrwAnth);  write(measured(23),'(a8)') x(23)     !CWAA
+   write(Simulated(24),'(i8)') nint(tadrwSilk);  write(measured(24),'(i8)') -99       !CWAS
+   write(Simulated(25),'(i8)') nint(cannaa*10);  write(measured(25),'(a8)') x(25)     !CNAA
+   write(Simulated(26),'(f8.2)') tnleaf;         write(measured(26),'(a8)') x(26)     !L#SM
 end if
 
-dnr2 = timdif(yrplt, gstdyrdoySim(7))
-if(dnr2 <= 0 .OR. yrplt <= 0) then
-   dnr2 = -99
-end if
-
-dnr3 = timdif(yrplt, gstdyrdoySim(9))
-if(dnr3 <= 0 .OR. yrplt <= 0) then
-   dnr3 = -99
-end if
-
-if(yrplt > 0) then
-   dnr7 = timdif (yrplt, mdate)
-   if(dnr7 <= 0)  then
-      dnr7 = -99
-   end if
-else
-   dnr7 = -99
-end if
-
-dnr0 = timdif(yrplt, gstdyrdoySim(2))
-if(dnr0 <= 0 .OR. yrplt <= 0) then
-   dnr0 = -99
-end if
-
-write(Simulated(1),'(i8)') dnr1;          write(measured(1),'(i8)') dflr    !ADAT
-write(Simulated(2),'(i8)') -99 ;          write(measured(2),'(i8)') -99     !PD1T
-write(Simulated(3),'(i8)') -99 ;          write(measured(3),'(i8)') -99     !PDFT
-write(Simulated(4),'(i8)') dnr7;          write(measured(4),'(i8)') dmat    !MDAT
-write(Simulated(5),'(i8)') nint(grain);   write(measured(5),'(a8)') x(5)    !HWAM
-write(simulated(6),'(i8)') -99 ;          write(measured(6),'(i8)') -99     !PWAM
-write(simulated(7),'(i8)') nint(seedno);  write(measured(7),'(a8)') x(7)    !H#AM
-write(simulated(8),'(f8.4)') skerwt;      write(measured(8),'(a8)') x(8)    !HWUM 
-write(simulated(9),'(f8.1)') kn;          write(measured(9),'(a8)') x(9)    !H#UM 
-write(simulated(10),'(i8)') nint(tadrw);  write(measured(10),'(a8)') x(10)  !CWAM
-
-! 08/11/2005 CHP changed from BWAH to BWAM, 
-write(Simulated(11),'(i8)') nint(bwam);         write(measured(11),'(a8)') x(11)  !BWAM
-write(Simulated(12),'(f8.2)') maxlai;           write(measured(12),'(a8)') x(12)  !LAIX
-write(Simulated(13),'(f8.3)') hi;               write(measured(13),'(a8)') x(13)  !HIAM
-write(Simulated(14),'(i8)') -99 ;               write(measured(14),'(i8)') -99    !THAM
-write(Simulated(15),'(i8)') nint(gnup);         write(measured(15),'(a8)') x(15)  !GNAM
-write(Simulated(16),'(i8)') nint(wtncan*10.);   write(measured(16),'(a8)') x(16)  !CNAM
-write(Simulated(17),'(i8)') nint(aptnup);       write(measured(17),'(a8)') x(17)  !SNAM
-write(Simulated(18),'(f8.1)') xgnp;             write(measured(18),'(a8)') x(18)  !GN%M
-write(Simulated(19),'(i8)') nint(tadrwAnth);    write(measured(19),'(a8)') x(19)  !CWAA
-write(Simulated(20),'(i8)') nint(cannaa*10);    write(measured(20),'(a8)') x(20)  !CNAA
-write(Simulated(21),'(f8.2)') lftips;           write(measured(21),'(a8)') x(21)  !L#SM
-write(Simulated(22),'(f8.2)') laitop;           write(measured(22),'(i8)') -99    !LAIT
-write(Simulated(23),'(i8)') dnr0;               write(measured(23),'(i8)') demrg
-write(Simulated(24),'(i8)') dnr2;               write(measured(24),'(i8)') dsilk  !LDAT
-write(Simulated(25),'(i8)') dnr3;               write(measured(25),'(i8)') dmilk  !KDAT
-write(Simulated(26),'(i8)') nint(tadrwSilk);    write(measured(26),'(i8)') -99    !CWAS
-
-end if
-
-call Opview(control, tadrw, acount, descrip, ideto, lftips,   &
+call Opview(control, tadrw, acount, descrip, ideto, nleaf,    &
      measured, plantstres, simulated, gstdyrdoySim,           &
-     stname, wtncan, lai, nint(grain), yrplt, growthStage)
+     stname, wtncan, xhlai, nint(grain), yrplt, growthStage)
 
 !-------------------------------------------------------------------
 ! Send information to OPSUM to generate SUMMARY.OUT file
@@ -446,7 +348,7 @@ call Opview(control, tadrw, acount, descrip, ideto, lftips,   &
 ! Store Summary.out labels and values in arrays to send to
 ! OPSUM routines for printing.  Integers are temporarily 
 ! saved as real numbers for placement in real array.
-label(1)  = 'ADAT'; value(1)  = float(yrnr1)
+label(1)  = 'ADAT'; value(1)  = float(gstdyrdoySim(6))
 label(2)  = 'MDAT'; value(2)  = float(mdate)
 label(3)  = 'DWAP'; value(3)  = sdrate
 label(4)  = 'CWAM'; value(4)  = tadrw
@@ -460,13 +362,14 @@ label(10) = 'H#UM'; value(10) = kn
 label(11) = 'NFXM'; value(11) = 0.0         !wtnfx*10.
 label(12) = 'NUCM'; value(12) = wtnup*10.
 label(13) = 'CNAM'; value(13) = wtncan*10.
-label(14) = 'GNAM'; value(14) = gnup        !wtnsd*10.
+label(14) = 'GNAM'; value(14) = wtnsd*10.        
 label(15) = 'PWAM'; value(15) = we
 label(16) = 'LAIX'; value(16) = maxlai
 label(17) = 'HIAM'; value(17) = hi
+label(18) = 'EDAT'; value(18) = float(gstdyrdoySim(2))
 
 ! Send labels and values to OPSUM
-call sumvals (sumnum, label, value) 
+call sumvals(sumnum, label, value) 
 
 ! Send Measured and Simulated datat to OPSUM
 call evaluatedat (acount, measured, simulated, descrip, olap) 
@@ -487,11 +390,9 @@ end subroutine MZ_AG_Opharv2
 !------------------------------------------------------------------------------------------------------------------------------
 ! control       Constructed type for control variables
 ! agefac        Nitrogen stress factor affecting cell expansion 
-! aptnup        Nitrogen in stover (above ground biomass), kg N/ha
 ! cannaa        Stover N at anthesis, g N/M2    
 ! tadrwAnth     Canopy weight at anthesis, kg/ha
 ! tadrwSilk     Canopy weight at silking, kg/ha
-! gnup          Total grain N uptake, kg N/ha
 ! kn            Grain number per plant, grains/plant 
 ! seedno        Grain numbers, grains/m2 
 ! harvfrac      Two-element array containing fractions of (1) yield harvested and (2) by-product harvested (fraction)
@@ -511,10 +412,8 @@ end subroutine MZ_AG_Opharv2
 ! turfac        Soil water stress effecting cell expansion
 ! wtncan        Weight of nitrogen in above ground biomass (stem, leaf, grain), kg N/ha    
 ! wtnup         Total nitrogen uptake, g/m2  
-! xgnp          Nitrogen content of grain, %
-! lai          Leaf area index, m2/m2
-! lftips        Number of leaf tips    
 ! grain         Yield in kg/ha at 0% moisture content
+! xhlai         Leaf area index, m2/m2
 ! yremrg        Year and day of year of emergence 
 ! yrplt         Year and day of year of planting
 !==============================================================================================================================

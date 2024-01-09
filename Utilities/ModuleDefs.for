@@ -446,6 +446,11 @@ C             CHP Added TRTNUM to CONTROL variable.
         REAL BIOMAS
         INTEGER NR5, iSTAGE, iSTGDOY
         CHARACTER*10 iSTNAME
+
+        !AgMaize variables for transpiration use efficiency method, KD 6/27/2014
+        INTEGER :: lfn, gstd
+        REAL :: gddae, dvs, cgrf, wlvtop, wlvbot, wst, weolg, wrt, cgrw
+        REAL, DIMENSION(50) :: greenla, lflon, lamaxpot, lapot
       END TYPE PlantType
 
 !     Data transferred from management routine 
@@ -702,6 +707,14 @@ C             CHP Added TRTNUM to CONTROL variable.
         Case ('RNITP') ; Value = SAVE_data % PLANT % RNITP
         Case ('SLAAD') ; Value = SAVE_data % PLANT % SLAAD
         Case ('XPOD')  ; Value = SAVE_data % PLANT % XPOD
+        Case ('GDDAE')  ; Value = SAVE_data % PLANT % GDDAE
+        Case ('DVS')    ; Value = SAVE_data % PLANT % DVS
+        Case ('CGRF')   ; Value = SAVE_data % PLANT % CGRF
+        Case ('WLVTOP') ; Value = SAVE_data % PLANT % WLVTOP
+        Case ('WLVBOT') ; Value = SAVE_data % PLANT % WLVBOT
+        Case ('WST')    ; Value = SAVE_data % PLANT % WST
+        Case ('WEOLG')  ; Value = SAVE_data % PLANT % WEOLG
+        Case ('CGRW')   ; Value = SAVE_data % PLANT % CGRW
         Case DEFAULT; ERR = .TRUE.
         END SELECT
 
@@ -838,6 +851,15 @@ C             CHP Added TRTNUM to CONTROL variable.
         Case ('RNITP');  SAVE_data % PLANT % RNITP  = Value
         Case ('SLAAD');  SAVE_data % PLANT % SLAAD  = Value
         Case ('XPOD');   SAVE_data % PLANT % XPOD   = Value
+        Case ('GDDAE')  ; SAVE_data % PLANT % GDDAE  = Value
+        Case ('DVS')    ; SAVE_data % PLANT % DVS    = Value
+        Case ('CGRF')   ; SAVE_data % PLANT % CGRF   = Value
+        Case ('WLVTOP') ; SAVE_data % PLANT % WLVTOP = Value
+        Case ('WLVBOT') ; SAVE_data % PLANT % WLVBOT = Value
+        Case ('WST')    ; SAVE_data % PLANT % WST    = Value
+        Case ('WEOLG')  ; SAVE_data % PLANT % WEOLG  = Value
+        Case ('WRT')    ; SAVE_data % PLANT % WRT    = Value
+        Case ('CGRW')   ; SAVE_data % PLANT % CGRW   = Value
         Case DEFAULT; ERR = .TRUE.
         END SELECT
 
@@ -916,7 +938,7 @@ C             CHP Added TRTNUM to CONTROL variable.
       EXTERNAL WARNING
       Character*(*) ModuleName, VarName
       Character*78 MSG(2)
-      REAL, DIMENSION(NL) :: Value
+      REAL, DIMENSION(:) :: Value
       Logical ERR
 
       Value = 0.0
@@ -928,6 +950,16 @@ C             CHP Added TRTNUM to CONTROL variable.
         SELECT CASE (VarName)
           CASE ('UH2O'); Value = SAVE_data % SPAM % UH2O
           CASE DEFAULT; ERR = .TRUE.
+        END SELECT
+
+      ! For AgMaize. Need to clean this up
+      CASE ('PLANT')
+        SELECT CASE (VarName)
+          Case ('GREENLA')  ; Value = SAVE_data % PLANT % GREENLA
+          Case ('LFLON')    ; Value = SAVE_data % PLANT % LFLON
+          Case ('LAMAXPOT') ; Value = SAVE_data % PLANT % LAMAXPOT
+          Case ('LAPOT')    ; Value = SAVE_data % PLANT % LAPOT  
+          CASE DEFAULT; ERR = .TRUE.  
         END SELECT
 
         CASE DEFAULT; ERR = .TRUE.
@@ -950,7 +982,7 @@ C             CHP Added TRTNUM to CONTROL variable.
       EXTERNAL WARNING
       Character*(*) ModuleName, VarName
       Character*78 MSG(2)
-      REAL, DIMENSION(NL) :: Value
+      REAL, DIMENSION(:) :: Value
       Logical ERR
 
       ERR = .FALSE.
@@ -960,6 +992,15 @@ C             CHP Added TRTNUM to CONTROL variable.
         SELECT CASE (VarName)
         Case ('UH2O'); SAVE_data % SPAM % UH2O = Value
         Case DEFAULT; ERR = .TRUE.
+        END SELECT
+
+      Case ('PLANT')
+        SELECT CASE (VarName)
+          Case ('GREENLA')  ; SAVE_data % PLANT % GREENLA  = Value
+          Case ('LFLON')    ; SAVE_data % PLANT % LFLON    = Value
+          Case ('LAMAXPOT') ; SAVE_data % PLANT % LAMAXPOT = Value
+          Case ('LAPOT')    ; SAVE_data % PLANT % LAPOT    = Value
+          Case DEFAULT; ERR = .TRUE.
         END SELECT
 
       Case DEFAULT; ERR = .TRUE.
@@ -994,6 +1035,8 @@ C             CHP Added TRTNUM to CONTROL variable.
         Case ('NR5');  Value = SAVE_data % PLANT % NR5
         Case ('iSTAGE');  Value = SAVE_data % PLANT % iSTAGE
         Case ('iSTGDOY'); Value = SAVE_data % PLANT % iSTGDOY
+        Case ('LFN') ;  Value = SAVE_data % PLANT % LFN
+        Case ('GSTD');  Value = SAVE_data % PLANT % GSTD
         Case DEFAULT; ERR = .TRUE.
         END SELECT
 
@@ -1040,6 +1083,8 @@ C             CHP Added TRTNUM to CONTROL variable.
         Case ('NR5');  SAVE_data % PLANT % NR5  = Value
         Case ('iSTAGE');  SAVE_data % PLANT % iSTAGE  = Value
         Case ('iSTGDOY'); SAVE_data % PLANT % iSTGDOY = Value
+        Case ('LFN') ;  SAVE_data % PLANT % LFN  = Value
+        Case ('GSTD');  SAVE_data % PLANT % GSTD = Value
         Case DEFAULT; ERR = .TRUE.
         END SELECT
 

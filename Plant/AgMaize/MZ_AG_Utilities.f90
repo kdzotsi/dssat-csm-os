@@ -17,10 +17,11 @@
       integer :: lunio, errnum, isens, lnum, linc, found, trtnum, yremrg, i
       character(len=6)  :: thesections(2), section, varno, econo 
       character(len=12) :: filea, files, filee, filec
-      character(len=17), parameter :: errkey='MZ_GM_READFILEIO' 
+      character(len=17), parameter :: errkey='MZ_AG_READFILEIO' 
       character(len=80) :: pathex, pathsr, pather, pathcr
       character :: vrname*16, fileio*30
-      real :: lfnum, rlamx, taint, photp, lftop, lalfx, ampli, asymp, pltpop, sdepth, rowspc, azir 
+      real :: crmat, rlamx, taint, gfpyr, photp, lftop, lalfx, ampli, asymp, sgfun, knpot, pgrmn, gasfn
+      real :: pltpop, sdepth, rowspc, azir 
       type (ControlType), intent(in) :: control
       character,intent(in) :: secread*6
       type(FileioType) dssatinpout
@@ -41,22 +42,27 @@
       do i=1,2
          write(thesections(i), '(8X)')
       end do
-      lnum = 0
-      isens = 0
+      lnum   = 0
+      isens  = 0
       trtnum = 0
       yremrg = 0
-      lfnum = 0.0
-      rlamx = 0.0
-      taint = 0.0
-      photp = 0.0
-      lftop = 0.0
-      lalfx = 0.0
-      ampli = 0.0
-      asymp = 0.0
+      crmat  = 0.0
+      rlamx  = 0.0
+      taint  = 0.0
+      gfpyr  = 0.0
+      photp  = 0.0
+      lftop  = 0.0
+      lalfx  = 0.0
+      ampli  = 0.0
+      asymp  = 0.0
+      sgfun  = 0.0
+      knpot  = 0.0
+      pgrmn  = 0.0
+      gasfn  = 0.0
       pltpop = 0.0
       sdepth = 0.0
       rowspc = 0.0
-      azir = 0.0
+      azir   = 0.0
       
       !Determine if reading all sections
       if(secread == 'ALLSEC') then
@@ -130,22 +136,28 @@
             if(found == 0) then
                call error(section, 42, fileio, lnum)
             else
-               read(lunio,'(A6, 1X, A16, 1X, A6, 5(1X,F5.2), 1X, F5.3, 2(1X,F5.0))', iostat=errnum)   &  
-                           varno, vrname, econo, lfnum, rlamx, taint, photp, lftop, lalfx, ampli, asymp    
+               read(lunio,'(A6, 1X, A16, 1X, A6, 1X, F5.1,   2(1X,F5.2), 1X, F5.0,   2(1X,F5.2),    &
+                            1X, F5.3, 2(1X,F5.0), 1X, F5.2, 1X, F5.0, 2(1X,F5.2))', iostat=errnum)  &  
+               varno, vrname, econo, crmat, rlamx, taint, gfpyr, photp, lftop, lalfx, ampli, asymp, sgfun, knpot, pgrmn, gasfn    
                lnum = lnum + 1
                if(errnum /= 0) call error(errkey, errnum, fileio, lnum) 
             end if 
             dssatinpout % varno  = varno
             dssatinpout % vrname = vrname
             dssatinpout % econo  = econo
-            dssatinpout % lfnum  = lfnum
+            dssatinpout % crmat  = crmat
             dssatinpout % rlamx  = rlamx
             dssatinpout % taint  = taint
+            dssatinpout % gfpyr  = gfpyr
             dssatinpout % photp  = photp
             dssatinpout % lftop  = lftop
             dssatinpout % lalfx  = lalfx
             dssatinpout % ampli  = ampli
             dssatinpout % asymp  = asymp
+            dssatinpout % sgfun  = sgfun
+            dssatinpout % knpot  = knpot
+            dssatinpout % pgrmn  = pgrmn
+            dssatinpout % gasfn  = gasfn
          end select 
       end do
          
@@ -163,8 +175,8 @@
       use MZ_AG_ModuleDefs
       implicit none  
       character,intent(in) :: section*6, files*12, pathsr*80
-      character(len=6)  :: xsections(8), secread
-      character(len=17), parameter :: errkey='MZ_GM_READSPECIES'      
+      character(len=6)  :: xsections(9), secread
+      character(len=17), parameter :: errkey='MZ_AG_READSPECIES'      
       character(len=80) :: C80
       character(len=92) :: filecc
       integer :: luncrp, errnum, lnum, found, isect, i
@@ -181,14 +193,15 @@
       real :: pliglf, pligst, pligrt, pligea, pligsd   !Lignin fractions in leaves, stems, roots, reproductive organs and grain
       real :: poalf, poast, poart, poaea, poasd        !Organic acid fractions in leaves, stems, roots, reproductive organs and grain
       real :: pminlf, pminst, pminrt, pminea, pminsd   !Mineral fractions in leaves, stems, roots, reproductive organs and grain
+      real :: tmnc, tance, rcnp, rance, ctcnp1, ctcnp2 !Plant and root nitrogen concentrations and parameters
       type(SpeciesType) spefileout
       
       !Initialize local variables
       write(C80, '(80X)')
-      write(secread, '(8X)')
+      write(secread, '(6X)')
       write(filecc, '(92X)')
-      do i=1,8
-         write(xsections(i), '(8X)')
+      do i=1,size(xsections)
+         write(xsections(i), '(6X)')
       end do
       tceil = 0.0
       torla = 0.0
@@ -227,6 +240,12 @@
       pminrt = 0.0
       pminea = 0.0
       pminsd = 0.0
+      tmnc   = 0.0
+      tance  = 0.0
+      rcnp   = 0.0
+      rance  = 0.0
+      ctcnp1 = 0.0
+      ctcnp2 = 0.0
       
       filecc = trim(pathsr) // files
       call getlun('FILEC', luncrp)
@@ -235,9 +254,9 @@
       
       !Determine if reading all sections or just one section
       if(section == 'ALLSEC') then
-         xsections(1:8) = (/ '*SEED ','*PHENO','*APSIM','*LEAF ','*PHOTO','*ROOT ','*RESPI','*PLANT' /)
+         xsections = (/ '*SEED ','*PHENO','*APSIM','*LEAF ','*PHOTO','*ROOT ','*RESPI','*PLANT','*NITRO' /)
       else
-         xsections(1) =  section  
+         xsections(1) = section  
       end if
       
       !Read the specified sections
@@ -473,6 +492,48 @@
          spefileout % pminsd = pminsd 
          rewind(luncrp)
 
+         case('*NITRO')
+         secread = xsections(i)      
+         call find(luncrp, secread, lnum, found)
+         if(found == 0) then
+            call error(secread, 42, filecc, lnum)
+         else  
+            call ignore(luncrp, lnum, isect, C80)                
+            read(C80, '(9X,F8.4)', iostat=errnum) tmnc 
+            if(errnum /= 0) call error(errkey, errnum, filecc, lnum)
+            call ignore(luncrp, lnum, isect, C80)
+            read(C80, '(9X,F8.3)', iostat=errnum) tance  
+            if(errnum /= 0) call error(errkey, errnum, filecc, lnum)
+            call ignore(luncrp, lnum, isect, C80)
+            read(C80, '(9X,F8.4)', iostat=errnum) rcnp  
+            if(errnum /= 0) call error(errkey, errnum, filecc, lnum)  
+            call ignore(luncrp, lnum, isect, C80)
+            read(C80, '(9X,F8.3)', iostat=errnum) rance  
+            if(errnum /= 0) call error(errkey, errnum, filecc, lnum)  
+            !Read intercept and slope for relationship between critical N concentration and growth stage
+            call ignore(luncrp, lnum, isect, C80)
+            read(C80,'(9X,F8.3)', iostat=errnum) ctcnp1
+            !If error reading either value, use defaults
+            if(errnum /= 0 .OR. isect /= 1 .OR. ctcnp1 < 1.E-6) then
+               ctcnp1 = 1.52
+               ctcnp2 = 0.160
+            else
+               call ignore(luncrp, lnum, isect, C80)
+               read(C80,'(9X,F8.3)', iostat=errnum) ctcnp2
+               if(errnum /= 0 .OR. isect /= 1 .OR. ctcnp2 < 1.E-6) then 
+                  ctcnp1 = 1.52
+                  ctcnp2 = 0.160
+               end if
+            endif      
+         end if      
+         spefileout % tmnc   = tmnc
+         spefileout % tance  = tance
+         spefileout % rcnp   = rcnp
+         spefileout % rance  = rance
+         spefileout % ctcnp1 = ctcnp1
+         spefileout % ctcnp2 = ctcnp2
+         rewind(luncrp)
+         
       end select 
       end do
       close(luncrp)
@@ -489,7 +550,7 @@
       implicit none
       character,intent(in) :: econo*6, filee*12, pather*80
       character(len=1), parameter :: blank=' '
-      character(len=17), parameter :: errkey='MZ_GM_READECOTYPE'
+      character(len=17), parameter :: errkey='MZ_AG_READECOTYPE'
       character :: ecotyp*6, econam*16, filegc*92
       character(len=78) :: message(10)
       character(len=255) :: C255
@@ -599,9 +660,9 @@
      else if(tip == 1.0) then        
         getcoltlu = 3.0  
      else if(tip > 1.0 .AND. tip <= lgnode) then
-        getcoltlu = max(1.7*tip + 1, 3.0)
+        getcoltlu = max(1.7*tip + 1.0, 3.0)
      else if(tip > lgnode) then 
-        getcoltlu = max((1.7*lgnode + 1) + (tip-lgnode), 3.0)
+        getcoltlu = max((1.7*lgnode + 1.0) + (tip-lgnode), 3.0)
      end if
   end function getcoltlu    
     

@@ -2,22 +2,23 @@
 ! MZ_AG_Opgrow
 ! Produces AgMaize's daily outputs
 ! Write the following files:
-!   AG_PlantGro.OUT  Daily growth output
-!   AG_LaindGro.OUT  Daily leaf-level output
+!   PlantGro.OUT  Daily growth output
+!   LaindGro.OUT  Daily leaf-level output
 !----------------------------------------------------------------------
 ! Revision History
 ! 04/17/2012 CHP/JZW Written (based on CSM's template)
 ! 08/23/2012 KAD General revisions, added leaf area outputs
 !----------------------------------------------------------------------
-! Called from: Main program: MZ_AG_AGMAIZE
+! Called from: MZ_AG_AGMAIZE
 ! Calls      : None
 !======================================================================================
-subroutine MZ_AG_Opgrow(control, iswitch, yrplt, mdate, growthStage, gti, tlu, lfnum,     & !Input
-       tnleaf, anthes, silk, olg, dvs, gddcer, rla, pla, lai, latf, greenla, gddten,      & !Input
-       gddapsim, lftips, lfcols, coltlu, elp, elt, maxlarf, lapot, gddladur, stLayer1,    & !Input
-       rlaSoil, rlaAir, pgross, maint, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, & !Input
-       ggr, wrt, wlv, wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf, cgrw,   & !Input
-       eop, trwup, swfac, rtdep, rlv, srad, parday, parsunday, parshday, radtotday)                                                                         
+subroutine MZ_AG_Opgrow(control, iswitch, soilprop, yrplt, mdate, growthStage, gti, tlu,          & !Input
+       tnleafrm, tnleaf, anthes, silk, olg, dvs, gddcer, rla, pla, xhlai, latf, greenla, gddten,  & !Input
+       gddapsim, lftips, lfcols, coltlu, tnleafphot, tnleaftemp, maxlarf, lflon, tluladur,        & !Input
+       stLayer1, rlaSoil, rlaAir, pgross, maint, fr, fsts, flv, fvear, kn, grt, gsh, glv,         & !Input
+       gst, egr, ggr, wrt, wlv, wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr,       & !Input
+       cgrf, cgrw, eop, trwup, swfac, nstres, rtdep, rlv, srad, parday, parsunday, parshday,      &
+       radtotday)                                                                         
       
 use ModuleDefs 
 use MZ_AG_ModuleDefs
@@ -30,29 +31,27 @@ save
 ! Constructed variables    
 type(ControlType), intent(in):: control
 type(SwitchType),  intent(in):: iswitch
+type (SoilType),   intent(in):: soilProp
 type(FileioType) :: datafileio
 
 ! Other variables 
-character(len=15), parameter :: outaltmz='AG_PlantGro.OUT', outlai="AG_LaindGro.OUT"
+character(len=15), parameter :: outaltmz='PlantGro.OUT', outlai="LaindGro.OUT"
 integer,parameter :: lenla=50
 character :: pathex*80
 logical :: fexist, fexistlai
 integer :: i, doy, dap, growthStage, noutmz, noutlai, errnum, errnumlai, year, yrplt, mdate, imax
-real :: gti, gddcer, gddten, gddapsim, tlu, tnleaf, lftips, lfcols, elp, elt, anthes, silk, pgross, maint
-real :: greenla(50), lapot(50), olg, dvs, rla, pla, lai, maxlarf, latf, coltlu, gddladur
-real :: lfnum, stLayer1, rlaSoil, rlaAir
-real :: fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr, wrt, wlv
+real :: gti, gddcer, gddten, gddapsim, tlu, tnleaf, lftips, lfcols, tnleafphot, tnleaftemp, anthes, silk, pgross, maint
+real :: greenla(50), lflon(50), olg, dvs, rla, pla, xhlai, maxlarf, latf, coltlu, tluladur
+real :: stLayer1, rlaSoil, rlaAir, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr, wrt, wlv
 real :: wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf, cgrw
-real :: eop, trwup, swfac, rtdep, rlv(nl)
-real :: cwad, gwad, lwad, swad
-real :: srad, parday, parsunday, parshday, radtotday
+real :: eop, trwup, swfac, rtdep, rlv(nl), dlayr(nl), cwad, gwad, lwad, swad, tnleafrm, nstres
+real :: srad, parday, parsunday, parshday, radtotday, lawd, pltpop
 character(len('LA')+2) :: paste(lenla), lfhead(lenla)
 !real, dimension(50) :: lamax, gddlabeg, gddlaend
 
 ! Functions/ parameters
 integer timdif
 character :: correctyear*4, zero_blanks*30
-!integer,parameter :: imax = nint(lfnum) + 4   !This is the maximum number of leaves for which output will be printed
 
 ! Constructed type variables
 character(len=1) :: idetg
@@ -66,6 +65,7 @@ dynamic = control % dynamic
 run     = control % run
 yrdoy   = control % yrdoy
 frop    = control % frop
+dlayr   = soilprop % dlayr
 
 ! Create local variables that are compatible with DSSAT output names
 cwad = tadrw
@@ -83,18 +83,16 @@ call getlun('outaltmz', noutmz)
 call getlun('outlai', noutlai)
 
  ! Read fileio case 'FILENP' and transfer variables
- call readfileio(control, 'FILENP', datafileio)
+ call readfileio(control, 'ALLSEC', datafileio)
  pathex = datafileio % pathex
+ pltpop = datafileio % pltpop
 
 !----------------------------------------------------------------------
 ! Dynamic = seasinit
 !----------------------------------------------------------------------
 else if(dynamic==seasinit) then
-  !Read fileio case 'INPUTS' and transfer variables
-  !call readfileio(control, 'INPUTS', datafileio)
-  !lfnum  = datafileio % lfnum
-  !!lfnum = 19.60
-  imax = nint(lfnum) + 4   !This is the maximum number of leaves for which output will be printed
+  lawd = 0.0
+  imax = nint(tnleafrm) + 4   !This is the maximum number of leaves for which output will be printed
   !lfhead(1:lenla) = paste('LA', lenla, len('LA'))
   !lfhead = repeat('LA',lenla)
   do i = 1, lenla
@@ -103,15 +101,13 @@ else if(dynamic==seasinit) then
      lfhead(i) = zero_blanks(lfhead(i))
   end do
   
-  !Indices of leaf numbers to display in output file !Or [(i, i=1,ceiling(lfnum))]
-  !lfind = [1:size(lfind)];  lfind = lfind(1:(nint(lfnum)+4))           
+  !Indices of leaf numbers to display in output file !Or [(i, i=1,ceiling(tnleafrm))]
+  !lfind = [1:size(lfind)];  lfind = lfind(1:(nint(tnleafrm)+4))           
   
   ! Open PlantGro.OUT as new or existing file    
   inquire(file=outaltmz, exist=fexist)
   if(fexist) then
      open(unit=noutmz, file=outaltmz, status='old', iostat=errnum, position='append')
-     !open(unit=100, file="PlantGro.OUT")
-     !write(100, FMT='(F6.3,1X,I6)') lfnum, imax
   else
      open(unit=noutmz, file=outaltmz, status='new', iostat=errnum)
      write(noutmz,'("*AgMAIZE DAILY OUTPUT FILE")')
@@ -131,27 +127,26 @@ else if(dynamic==seasinit) then
   call header(seasinit, noutlai, run)
 
   ! Write variable headers        
-  write(noutmz, '(A5, 1X,A3, 2(1X,A5), 1X,A4, 2(1X,A6), 12(1X,A6), 13(1X,A6), 30(1X,A6), 5(1X,A6))')    & 
+  write(noutmz, '(A5, 1X,A3, 2(1X,A5), 1X,A4, 2(1X,A6), 12(1X,A6), 13(1X,A6), 30(1X,A6), 7(1X,A6))')           & 
  !               <imax>(1X,A6))') 
-       '@YEAR', 'DOY', 'DAS', 'DAP', 'GSTD', 'GTI','GDDCER',    &
-       'GDDTEN','GDDAPS','PGROSS','MAINRE','TLU','NTIP','NLIG','TNLEAF','ELP','ELT','ANTHES','SILK',           &
-       'OLG','DVS','RLA','PLA','LAID','LADF','LATF', 'COLTLU', 'LLONG', 'GDLADU', 'RLASOL','RLAAIR','STLYR1',  &
-       'FR','FSTS','FLV','FVEAR','KW','GRT','GSH','GLV','GST','EGR','GGR',                                     &
-       'KN','WRT','LWAD','WLVTOP','WLVBOT','WSTS','WSTR','SWAD','WE','GWAD','CWAD','CGR','CGRW','CGRF','EOP','TRWUP', &
-       'SWFAC','RTDEP','RLV2','SRAD','PARD','PARDSL','PARDSH','RADTOT'
+       '@YEAR', 'DOY', 'DAS', 'DAP', 'GSTD', 'GTI','GDDCER',                                                   &
+       'GDDTEN','GDDAPS','PHAD','MAINRE','TLU','NTIP','NLIG','TNLEAF','TNLFP','TNLFT','ANTHES','SILK',         &
+       'OLG','DVS','RLA','PLA','LAID','LADF','LATF', 'COLTLU', 'LGLF10', 'TLUDUR', 'RLASOL','RLAAIR','STLYR1', &
+       'FR','FSTS','FLV','FVEAR','GWGD','GRT','GSH','GLV','GST','EGR','GGR',                                   &
+       'G#AD','RWAD','LWAD','LWADT','LWADB','SSAD','RSAD','SWAD','EWAD','GWAD','CWAD','CGRAD','CGRW','CGRAF',  &
+       'EOPD','TWUPD','WSPD','RDPD','RTLD','SRAD','PARDAY','PARDSL','PARDSH','RADTOT','NSTRES','LAWD'
                                                                                          
        !paste(repeat('lamx',imax),1:imax,imax,len('lamx'))
   write(noutlai, '(A5, 1X,A3, 2(1X,A5), <imax>(1X,A6))') '@YEAR', 'DOY', 'DAS', 'DAP', lfhead(1:imax)    
         
-! write(noutmz, '('@YEAR', 1X, 'DOY', 1X, 'DAS', 1X, 'DAP', 1X, 'GSTD', 1X, 'GTI', 1X, 'GDDCER', 11(1X,A6), 13(1X,A6), <imax>(1X,A6))')         
        
 !----------------------------------------------------------------------
 ! Dynamic = output
 !----------------------------------------------------------------------
 else if(dynamic==output) then
   dap = max(0, timdif(yrplt, yrdoy))
-  if (dap > das) dap = 0
-
+  if(dap > das) dap = 0
+  if(lwad > 0) lawd = xhlai*1.E4/(lwad/10.)
   ! Write output based on user specified frequency: 
   ! Use advance='no' to position file within the current record
   if((mod(das,frop) == 0)     &     !Daily output every FROP days,
@@ -159,20 +154,24 @@ else if(dynamic==output) then
      .OR. (yrdoy == mdate)) then    !at harvest maturity         
   
      call yr_doy(yrdoy, year, doy)     
-     write(noutmz, '(1X,A4, 1X,I3, 2(1X,I5), 1X,I4, 2(1X,F6.1), 2(1X,F6.1), 2(1X,F6.1), 1X,F6.2, &
-     2(1X,F6.2), 13(1X,F6.2), 2(1X,F6.0), 3(1X,F6.2), 5(1X,F6.2), 19(1X,F6.0), 6(1X,F6.2), 5(1X,F6.2))') &
+     write(noutmz, '(1X,I4, 1X,I3, 2(1X,I5), 1X,I4, 2(1X,F6.1), 2(1X,F6.1), &
+                    2(1X,F6.1), 1X,F6.2, 2(1X,F6.2), 5(1X,F6.2)             &
+                    8(1X,F6.2), 1X,F6.0, 1X,F6.2, 3(1X,F6.2),               &
+                    5(1X,F6.2), 13(1X,F6.0),                                &
+                    6(1X,F6.0), 5(1X,F6.2), 1X,F6.1,                        &
+                    7(1X,F6.2))')                                           &
      !<imax>(1X,F6.1), 
      !5(1X,F6.2), 5(1X,F6.2))')
      !To plot in GBuild, use correctyear(year) instead of year, and change formatting to character
-                correctyear(year), doy, das,dap, growthStage, gti,gddcer, gddten,gddapsim,  &
-                pgross,maint, tlu, lftips,lfcols, tnleaf,elp,elt,anthes,silk,      &
-                olg,dvs,rla,pla,lai,maxlarf,latf,coltlu, lapot(5),gddladur, rlaSoil,rlaAir,stLayer1,  &
-                fr,fsts,flv,fvear,kw, grt,gsh,glv,gst,egr,ggr,kn,wrt,lwad,wlvtop,wlvbot,wsts,wstr,    &      
-                swad,we,gwad,cwad,cgr,cgrw, cgrf,eop,trwup,swfac,rtdep,rlv(2),    &
-                srad,parday,parsunday,parshday,radtotday
+                year, doy, das,dap, growthStage, gti,gddcer, gddten,gddapsim,                             &
+                pgross/10.,maint/10., tlu, lftips,lfcols, tnleaf,tnleafphot,tnleaftemp,anthes,silk,       &
+                olg,dvs,rla,pla,xhlai,maxlarf,latf,coltlu, lflon(10), tluladur, rlaSoil,rlaAir,stLayer1,  &
+                fr,fsts,flv,fvear,kw, grt,gsh,glv,gst,egr,ggr,kn*pltpop,wrt,lwad,wlvtop,wlvbot,wsts,wstr, &      
+                swad,we,gwad,cwad,cgr,cgrw, cgrf,eop,trwup*10.,(1.-swfac),rtdep/100., sum(rlv*dlayr),     &
+                srad,parday,parsunday,parshday,radtotday,(1.-nstres),lawd
      !lamax(1:imax), 
      !gddlabeg(1:5), gddlaend(1:5)
-     write(noutlai, '(1X,A4, 1X,I3, 2(1X,I5), <imax>(1X,F6.1))') correctyear(year), doy, das, dap, greenla(1:imax)
+     write(noutlai, '(1X,I4, 1X,I3, 2(1X,I5), <imax>(1X,F6.1))') year, doy, das, dap, greenla(1:imax)
   end if
         
 !----------------------------------------------------------------------
@@ -183,11 +182,7 @@ else if(dynamic==seasend) then
   close(noutmz) 
   close(noutlai)
   
-  ! Copy daily output file to filex's directory
-  !call copy_file('*.OUT', trim(pathex))
-  call copy_file(outaltmz, trim(pathex)//outaltmz)
-  
-       
+      
 !-----------------------------------------------------------------------
 ! End of dynamic if structure
 !-----------------------------------------------------------------------
@@ -205,7 +200,6 @@ end subroutine MZ_AG_Opgrow
 ! Variable definitions                                                                                  Unit 
 !------------------------------------------------------------------------------------------------------------------------------
 ! anthes       Leaf stage at anthesis                                                                   tlu   
-! lfnum        Base leaf number                                                                         leaves
 ! cgrw         Mean crop growth rate (aboveground dry matter) during the previous week                  kg[dm]/ha/day
 ! coltlu       Thermal leaf units from leaf tip appearance to full leaf expansion                       tlu
 ! control      Constructed type for control variables
@@ -219,8 +213,6 @@ end subroutine MZ_AG_Opgrow
 !              rate=3 for rate calculations, integr=4 for integration of state variables, output=5 for
 !              writing daily outputs, seasend=6 for closing output files                                 
 ! egr	       Ear growth rate	                                                                        kg[dm]/ha/day
-! elp          Change in leaf number due to photoperiod                                                 leaves 
-! elt          Change in leaf number due to temperature                                                 leaves      
 ! errnum       Integer variable that informs on the data transfer status for the plant growth output file
 ! errnumlai    Integer variable that informs on the data transfer status for the detailed leaf area output file
 ! eop          Potential plant transpiration                                                            mm/day
@@ -233,7 +225,6 @@ end subroutine MZ_AG_Opgrow
 ! fsts         Proportion of assimilates partitioned to structural stems                                fraction
 ! gddapsim     Cumulative daily thermal time after planting using APSIM's approach                      degree-day
 ! gddcer       Cumulative daily thermal time after planting (CERES method)                              degree-day                                                            
-! gddladur     Duration of leaf expansion                                                               degree-day
 ! gddten       Cumulative daily thermal time after planting using GDD[10,30]                            degree-day
 ! ggr	       Grain growth rate	                                                                    kg[dm]/ha/day
 ! glv	       Growth rate of leaves' dry matter	                                                    kg[dm]/ha/day
@@ -250,10 +241,10 @@ end subroutine MZ_AG_Opgrow
 ! iswitch      Constructed type for control switches
 ! kn           Kernel number                                                                            kernel/plant
 ! kw	       Kernel weight 	                                                                        mg/kernel
-! lai          Whole-plant leaf area index                                                              m2[leaf]/m2[ground]
 ! lapot(i)     Cumulative area of leaf i during expansion (tip to collar) under non-stressed conditions m2/leaf
 ! latf         Effect of temperature on leaf growth
 ! lfcols       Leaf node position of leaf that has completed expansion
+! lflon(i)     Longevity of leaf i                                                                      degree-day
 ! lwad	       Total weight of leaves	                                                                kg[dm]/ha
 ! maint        Maintenance respiration	                                                                kg[glucose]/ha/day 
 ! maxlarf      Reduction factor of maximum leaf area due to plant density
@@ -277,7 +268,10 @@ end subroutine MZ_AG_Opgrow
 ! tadrw	       Total above ground dry weight	                                                        kg[dm]/ha
 ! timdif       [Function] For computing difference between two dates                                    returns number of days 
 ! tlu          Thermal leaf unit (cumulative rate of leaf tip appearance)                               tlu
+! tluladur     Duration of leaf expansion of youngest leaf                                              tlu
 ! tnleaf       Total number of initiated leaves                                                         leaves
+! tnleafphot   Change in leaf number due to photoperiod                                                   leaves 
+! tnleaftemp   Change in leaf number due to temperature                                                   leaves    
 ! trwup        Total potential daily root water uptake                                                  cm/day
 ! we	       Weight of ears	                                                                        kg[dm]/ha
 ! wlv	       Total weight of leaves	                                                                kg[dm]/ha
@@ -287,6 +281,7 @@ end subroutine MZ_AG_Opgrow
 ! wst	       Weight of stems	                                                                        kg[dm]/ha
 ! wstr	       Weight of (temporarily-stored) stem reserves                                             kg[sucrose]/ha
 ! wsts	       Weight of structural stem 	                                                            kg[dm]/ha
+! xhlai        Whole-plant leaf area index                                                              m2[leaf]/m2[ground]
 ! year         Four-digit year                                                                          yyyy
 ! yrdoy        Year day-of-year                                                                         yyyyddd
 ! yrplt        Planting date                                                                            yyyyddd

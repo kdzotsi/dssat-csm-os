@@ -783,7 +783,17 @@ c          WRITE (HEADER(I),'(2F6.0,F6.2)') PHINT, LLIFA, STFR
       CASE ('MZIXM')
              WRITE (HEADER(I),915) P1,P2,P5,AX; I=I+1
              WRITE (HEADER(I),916) G2,G3,PHINT,LX; I=I+1
-             
+
+!-----------------------------------------------------------------------
+      !     AgMaize
+            CASE ('MZAGM')
+               READ(PLAINTXT, 3000) CRMAT, RLAMX, TAINT, GFPYR, PHOTP,
+     &                            LFTOP, LALFX, AMPLI, ASYMP, SGFUN, 
+     &                            KNPOT, PGRMN, GASFN
+               WRITE(HEADER(I), 3001) CRMAT,RLAMX,TAINT,GFPYR,PHOTP; I=I+1
+               WRITE(HEADER(I), 3002) LFTOP,LALFX,AMPLI,ASYMP,SGFUN; I=I+1
+               WRITE(HEADER(I), 3003) KNPOT,PGRMN,GASFN; I=I+1
+
 !-----------------------------------------------------------------------
 !     CERES-Sugarbeet
       CASE ('BSCER')
@@ -996,6 +1006,15 @@ C-----------------------------------------------------------------------
      &         '  LAWS   :',F6.0,'  LFLI   :',F6.0)
 
  1010 FORMAT (1X,'PBASE  :',F6.2,'  PSAT   :',F6.2)
+
+ ! AgMaize
+ 3000 FORMAT(F5.1, 1X, 2(1X,F5.2), 1X, F5.0, 2(1X,F5.2), 
+     &    1X,F5.3, 1X,F5.0, 1X,F5.1, 1X,F5.2, 1X,F5.0, 2(1X,F5.2))
+ 3001 FORMAT (' CRMAT : ',F5.1, '  RLAMX : ',F5.2, '  TAINT : ',F5.2,
+     &        '  GFPYR : ',F5.0, '  PHOTP : ',F5.2)
+ 3002 FORMAT (' LFTOP : ',F5.2, '  LALFX : ',F5.3, '  AMPLI : ',F5.0, 
+     &        '  ASYMP : ',F5.1, '  SGFUN : ',F5.2)
+ 3003 FORMAT (' KNPOT : ',F5.0, '  PGRMN : ',F5.2, '  GASFN : ',F5.2)
  
       END SUBROUTINE OPSOIL
 C=======================================================================

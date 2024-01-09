@@ -54,7 +54,7 @@ tmpa = (tmax + tmin)/2.0       !Daily average air temperature
 teff = qten**(0.1*tmpa - 2.5)  !No temperature effect at 25 degrees C (i.e. teff = 1.0)
 
 ! Maintenance respiration
-if(dvs > 2.0 .or. cgrw <= 0.0) then
+if(cgrw <= 0.0) then
    maint = 0.0
 else
    maint = teff*(0.03*wlvtop + 0.015*(wlvbot+wst) + 0.01*weolg + 0.01*wrt)

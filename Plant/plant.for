@@ -93,6 +93,7 @@ C-----------------------------------------------------------------------
 !         'SGCER' - CERES-Sorghum
 !         'SWCER' - CERES-Sweet corn
 !         'MZIXM' - IXIM Maize
+!         'MZAGM' - AgMaize
 !         'TNARO' - Aroids - Tanier
 !         'TRARO' - Aroids - Taro
 !         'RIORZ' - IRRI ORYZA Rice model
@@ -529,6 +530,13 @@ C         Variables to run CASUPRO from Alt_PLANT.  FSR 07-23-03
           KTRANS = KEP        !KJB/WDB/CHP 10/22/2003
           KSEVAP = KEP
         ENDIF
+
+!     -------------------------------------------------
+      ! AgMaize
+      CASE('MZAGM')
+        CALL MZ_AG_AGMAIZE(CONTROL, ISWITCH, SOILPROP, WEATHER,         !Input
+     &    ST, SW, YRPLT, YREND, SNOW, NO3, NH4, EOP, TRWUP, HARVFRAC,   !Input
+     &    MDATE, XLAI, XHLAI, RLV, NSTRES, SENESCE, UNH4, UNO3)         !Output
 
 !     -------------------------------------------------
 !     Sugarbeet

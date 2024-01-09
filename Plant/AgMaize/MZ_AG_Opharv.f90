@@ -2,7 +2,7 @@
 ! MZ_AG_Opharv
 ! Produces AgMaize's end-of-season outputs
 ! Write the following files:
-!   AG_GroStage.OUT
+!   GroStage.OUT
 !----------------------------------------------------------------------
 ! Revision History
 ! 03/05/2013 KAD Written (based on MZ_Opharv)
@@ -32,7 +32,7 @@ integer, dimension(10)   :: gstddoySim, gstdyearSim, gstdnum
 real, dimension(10)      :: growthtlu
 
 ! Other variables
-character(len=16), parameter :: gstdfile='AG_GroStage.OUT'
+character(len=16), parameter :: gstdfile='GroStage.OUT'
 character :: filea*12, pathex*80
 character(len=6), dimension(EvaluateNum) :: olab, X
 logical :: gstdfexist

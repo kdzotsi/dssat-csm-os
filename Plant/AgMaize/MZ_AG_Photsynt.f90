@@ -19,9 +19,10 @@
 !  -azir is azimuth relative to North while azzon is relative to South?
 !
 ! TODO:
+! -Start photosynthesis at emergence? pgross getting negative before emergence
 ! -Error message for rowsp or pltpop = 0.0
 !=======================================================================
-subroutine MZ_AG_Photsynt(control, soilprop, weather, sw1,   &
+subroutine MZ_AG_Photsynt(control, soilprop, weather, sw,    &
            gddae, dvs,                                       &   !From Phenology
            lfn, greenla, lflon, lamaxpot, lapot,             &   !From Leaf area
            pgross, srad, parday, parsunday, parshday, radtotday) !Outputs                                             
@@ -47,7 +48,7 @@ rad   = pi/180.0,  &
 pang  = 64.0,      &
 cm2tom2 = 1.0E-4
 integer, intent(in) :: lfn
-real, intent(in)  :: gddae, dvs
+real, intent(in)  :: sw(nl), gddae, dvs
 real, intent(in), dimension(lenla)  :: lflon, lamaxpot    
 real, intent(out) :: pgross
                         
@@ -61,7 +62,7 @@ type(SpeciesType) :: dataspecies
 ! Variables from constructed types 
 integer :: dynamic, yrdoy
 real, dimension(ts) :: amtrh, tairhr, azzon, beta, frdifp, parhr
-real :: salb, dul1, sw1, snup, sndn, azir, pltpop, rowspcm, rowspmeter
+real :: salb, dul(nl), snup, sndn, azir, pltpop, rowspcm, rowspmeter, sgfun, gasfn, tmin
 real :: asmax, canh, xc    !Photosynthesis parameters from species file
 
 ! KAD 09/24/2013 - For checking radiation subroutine
@@ -80,7 +81,7 @@ real,dimension(lenla) :: arefhr, adifhr, addrhr, addfhr
 
 ! Transfer values from constructed data types into local variables
 dynamic = control  % dynamic
-yrdoy   = control % yrdoy
+yrdoy   = control  % yrdoy
 azzon   = weather  % azzon
 beta    = weather  % beta
 amtrh   = weather  % amtrh
@@ -88,9 +89,10 @@ tairhr  = weather  % tairhr
 sndn    = weather  % sndn
 snup    = weather  % snup
 frdifp  = weather  % frdifp
-parhr   = weather  % parhr     
-dul1    = soilprop % dul(1)    !Fix this
-salb    = soilprop % salb    
+parhr   = weather  % parhr   
+tmin    = weather  % tmin  
+salb    = soilprop % salb 
+dul     = soilprop % dul   
 
 !----------------------------------------------------------------------
 ! Dynamic = runinit or dynamic = seasinit
@@ -98,34 +100,41 @@ salb    = soilprop % salb
 if(dynamic==runinit .or. dynamic==seasinit) then
 !open(unit=9000, file="PHOTAGMAIZE.OUT")
 !Initialize variables
-light = .true.
-pghr = 0.0
-betn = 0.0
-canht = 0.0
-hlai = 0.0
-lfln = 0.0
-lflp = 0.0
-canw = 0.0
-canwh = 0.0
+light  = .true.
+pghr   = 0.0
+betn   = 0.0
+canht  = 0.0
+hlai   = 0.0
+lfln   = 0.0
+lflp   = 0.0
+canw   = 0.0
+canwh  = 0.0
 daytim = .false.
-hs = 0.0
+hs     = 0.0
 turfac = 1.0
-mult = 0.0
-amplt = 0.0
-froll = 0.0
-palb = 0.0
-palbd = 0.0
-pg = 0.0
+mult   = 0.0
+amplt  = 0.0
+froll  = 0.0
+palb   = 0.0
+palbd  = 0.0
+pg     = 0.0
 pgross = 0.0
+srad   = 0.
+parday = 0.
+parsunday = 0.
+parshday  = 0.
+radtotday = 0.
 
 !Read all sections of fileio and transfer variables
 call readfileio(control, 'ALLSEC', datafileio)
-files  = datafileio % files
-pathsr = datafileio % pathsr
-pltpop  = datafileio % pltpop 
-rowspcm = datafileio % rowspc
+files      = datafileio % files
+pathsr     = datafileio % pathsr
+sgfun      = datafileio % sgfun
+gasfn      = datafileio % gasfn
+pltpop     = datafileio % pltpop 
+rowspcm    = datafileio % rowspc
 rowspmeter = rowspcm / 100.0
-azir    = datafileio % azir
+azir       = datafileio % azir
 
 !Read photosynthesis parameters from species file and transfer variables
 call readspecies(files, pathsr, '*PHOTO', dataspecies)
@@ -135,10 +144,10 @@ canh  = dataspecies % canh
 
 !CHP 2/23/2009 added array index for tairhr -- I know this is wrong, but
 !what does it need to be?  Call subroutine in a loop from 1 to 24?
-call MZ_AG_Iphotsynt(dynamic, asmax, gddae, greenla, plaisl, plaish,  &  !Input
-     lapot, lflon, lfn, light, parsh, parsun, tairhr(1), lamaxpot,    &  !Input
-     pghr)                                                               !Output
-   
+call MZ_AG_Iphotsynt(dynamic, tmin, asmax, gddae, greenla, plaisl, plaish,         & !Input
+     lapot, lflon, lfn, light, parsh, parsun, tairhr(1), lamaxpot, sgfun, gasfn,   & !Input
+     pghr)                                                                           !Output
+                                                                 
 !----------------------------------------------------------------------
 ! Dynamic = rate 
 !----------------------------------------------------------------------
@@ -178,14 +187,15 @@ if(canht > 0.01 .and. canwh < 0.01) canwh = 0.01
 
 ! Calculate plant albedo to PAR as a function of surface SW
 palb = 0.6 * salb
-if(sw1 < dul1) then
+if(sw(1) < dul(1)) then
    palbd = palb * 1.25
-   palb = palbd - (palbd-palb)/dul1 * sw1
+   palb = palbd - (palbd-palb)/dul(1) * sw(1)
 end if
 
 !***Begin hourly loop
 pgday = 0.0
 light = .true.
+
 !open(unit=9000, file="RADABS.OUT")
 !write(9000,'(9(1X,A6))') 'YRDOY', 'HOUR', 'LEAFNO', 'LAISL', 'LAISH', 'ADIF', 'ADDR', 'ADDF', 'AREF'
 do h = 1, ts
@@ -220,9 +230,9 @@ do h = 1, ts
    radtotHour(h) = radtot*3600.
    
    !Calculate instantaneous gross assimilation
-   call MZ_AG_Iphotsynt(dynamic, asmax, gddae, greenla, plaisl, plaish,      &  !Input
-        lapot, lflon, lfn, light, parsh, parsun, tairhr(h), lamaxpot,        &  !Input
-        pghr)                                                                   !Output
+   call MZ_AG_Iphotsynt(dynamic, tmin, asmax, gddae, greenla, plaisl, plaish,         & !Input
+        lapot, lflon, lfn, light, parsh, parsun, tairhr(h), lamaxpot, sgfun, gasfn,   & !Input
+        pghr)                                                                           !Output
      
    !Integrate instantaneous canopy photoynthesis (µmol[CO2]/m2/s) to get daily values (g[CO2]/m2/day)
    !1 mol[CO2] = 44 g[CO2] so 1umol[CO2] = 44.10-6g[CO2] and 1umol[CO2]/s = 44.10-6 x 3600 g[CO2]/hr
@@ -279,7 +289,6 @@ end subroutine MZ_AG_Photsynt
 ! datafileio   Constructed variable containing all variables read from the DSSAT45.INP                  -
 ! dataspecies  Constructed variable containing all variables read from the species file                 -
 ! daytim       Logical variable that describes daytime or nighttime conditions                          -
-! dul1         Volumetric drained upper limit of soil water holding capacity for layer 1                cm3[water]/cm3[soil]
 ! dvs          Development stage (0 is planting, 1 is silking, and 2 is maturity)                       Unitless
 ! dynamic      Main control variable to tell each module which section of code to run                   -
 ! files        Species file name                                                                        -
@@ -325,7 +334,6 @@ end subroutine MZ_AG_Photsynt
 ! scvp         Scattering coefficient used to calculate diffuse reflectance
 ! sndn         Time of sunset                                                                           hour
 ! snup         Time of sunrise                                                                          hour
-! sw1          Volumetric soil water content of soil layer 1                                            cm3[water]/cm3[soil] 
 ! tairhr(h)    Hourly air temperature                                                                   degrees   
 ! tincr        Time increment                                                                           hour
 ! ts           Number of hourly time steps per day                                                      -

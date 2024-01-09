@@ -165,6 +165,14 @@ C-----------------------------------------------------------------------
         WetDay = 0
         NDays = 0
 
+
+!       [KD 07/08/2014] Reset biomass to 0. During a run number > 1, the 
+!       GET('PLANT','BIOMAS' BIOMAS) statement under STEMP_EPIC's rate obtains
+!       a biomass value equal to the previous run's last biomass value. This is
+!       because SPAM (and hence STEMP_EPIC) is called before the crop models 
+!       reinitialize dry matter.
+        CALL PUT('PLANT', 'BIOMAS', 0.)
+
 !       Soil cover function
         CALL GET('ORGC' ,'MULCHMASS',MULCHMASS)   !kg/ha
         CALL GET('WATER','SNOW'     , SNOW)       !mm
@@ -432,20 +440,20 @@ C=======================================================================
 ! SOILPROP Composite variable containing soil properties including bulk
 !            density, drained upper limit, lower limit, pH, saturation
 !            water content.  Structure defined in ModuleDefs.
-! SRFTEMP  Temperature of soil surface litter (°C)
-! ST(L)    Soil temperature in soil layer L (°C)
+! SRFTEMP  Temperature of soil surface litter (ï¿½C)
+! ST(L)    Soil temperature in soil layer L (ï¿½C)
 ! SW(L)    Volumetric soil water content in layer L
 !           (cm3 [water] / cm3 [soil])
 ! SWI(L)   Initial soil water content (cm3[water]/cm3[soil])
 ! TAV      Average annual soil temperature, used with TAMP to calculate
-!            soil temperature. (°C)
-! TAVG     Average daily temperature (°C)
+!            soil temperature. (ï¿½C)
+! TAVG     Average daily temperature (ï¿½C)
 ! TBD      Sum of bulk density over soil profile
 ! TDL      Total water content of soil at drained upper limit (cm)
 ! TLL      Total soil water in the profile at the lower limit of
 !            plant-extractable water (cm)
-! TMA(I)   Array of previous 5 days of average soil temperatures. (°C)
-! TMAX     Maximum daily temperature (°C)
+! TMA(I)   Array of previous 5 days of average soil temperatures. (ï¿½C)
+! TMAX     Maximum daily temperature (ï¿½C)
 ! TSW      Total soil water in profile (cm)
 ! WC
 ! WW
