@@ -60,6 +60,7 @@ C  08/09/2012 GH  Added CSCAS model
 !  06/15/2022 CHP Added CropStatus
 !  01/26/2023 CHP Reduce compile warnings: add EXTERNAL stmts, remove 
 !                 unused variables, shorten lines. 
+!  01/10/2024 KAD Added AgMaize
 C=======================================================================
 
       SUBROUTINE PLANT(CONTROL, ISWITCH,
@@ -534,8 +535,8 @@ C         Variables to run CASUPRO from Alt_PLANT.  FSR 07-23-03
 !     -------------------------------------------------
       ! AgMaize
       CASE('MZAGM')
-        CALL MZ_AG_AGMAIZE(CONTROL, ISWITCH, SOILPROP, WEATHER,         !Input
-     &    ST, SW, YRPLT, YREND, SNOW, NO3, NH4, EOP, TRWUP, HARVFRAC,   !Input
+        CALL MZ_AG_AGMAIZE(CONTROL, ISWITCH, SOILPROP, WEATHER, ST,     !Input
+     &    SW, YRPLT, YREND, SNOW, NO3, NH4, EOP, EP, TRWUP, HARVFRAC,   !Input
      &    MDATE, XLAI, XHLAI, RLV, NSTRES, SENESCE, UNH4, UNO3)         !Output
 
 !     -------------------------------------------------

@@ -41,17 +41,17 @@ character :: pathex*80
 logical :: fexist, fexistlai
 integer :: i, doy, dap, growthStage, noutmz, noutlai, errnum, errnumlai, year, yrplt, mdate, imax
 real :: gti, gddcer, gddten, gddapsim, tlu, tnleaf, lftips, lfcols, tnleafphot, tnleaftemp, anthes, silk, pgross, maint
-real :: greenla(50), lflon(50), olg, dvs, rla, pla, xhlai, maxlarf, latf, coltlu, tluladur
+real :: greenla(lenla), lflon(lenla), olg, dvs, rla, pla, xhlai, maxlarf, latf, coltlu, tluladur
 real :: stLayer1, rlaSoil, rlaAir, fr, fsts, flv, fvear, kn, grt, gsh, glv, gst, egr, ggr, wrt, wlv
 real :: wlvtop, wlvbot, wsts, wstr, wst, we, grain, kw, tadrw, cgr, cgrf, cgrw
 real :: eop, trwup, swfac, rtdep, rlv(nl), dlayr(nl), cwad, gwad, lwad, swad, tnleafrm, nstres
 real :: srad, parday, parsunday, parshday, radtotday, lawd, pltpop
-character(len('LA')+2) :: paste(lenla), lfhead(lenla)
+character(len=4) :: lfhead(lenla)
 !real, dimension(50) :: lamax, gddlabeg, gddlaend
 
 ! Functions/ parameters
 integer timdif
-character :: correctyear*4, zero_blanks*30
+character :: zero_blanks*30
 
 ! Constructed type variables
 character(len=1) :: idetg
@@ -92,7 +92,7 @@ call getlun('outlai', noutlai)
 !----------------------------------------------------------------------
 else if(dynamic==seasinit) then
   lawd = 0.0
-  imax = nint(tnleafrm) + 4   !This is the maximum number of leaves for which output will be printed
+  imax = nint(tnleafrm)  !This is the maximum number of leaves for which output will be printed
   !lfhead(1:lenla) = paste('LA', lenla, len('LA'))
   !lfhead = repeat('LA',lenla)
   do i = 1, lenla
@@ -128,16 +128,13 @@ else if(dynamic==seasinit) then
 
   ! Write variable headers        
   write(noutmz, '(A5, 1X,A3, 2(1X,A5), 1X,A4, 2(1X,A6), 12(1X,A6), 13(1X,A6), 30(1X,A6), 7(1X,A6))')           & 
- !               <imax>(1X,A6))') 
        '@YEAR', 'DOY', 'DAS', 'DAP', 'GSTD', 'GTI','GDDCER',                                                   &
        'GDDTEN','GDDAPS','PHAD','MAINRE','TLU','NTIP','NLIG','TNLEAF','TNLFP','TNLFT','ANTHES','SILK',         &
        'OLG','DVS','RLA','PLA','LAID','LADF','LATF', 'COLTLU', 'LGLF10', 'TLUDUR', 'RLASOL','RLAAIR','STLYR1', &
        'FR','FSTS','FLV','FVEAR','GWGD','GRT','GSH','GLV','GST','EGR','GGR',                                   &
        'G#AD','RWAD','LWAD','LWADT','LWADB','SSAD','RSAD','SWAD','EWAD','GWAD','CWAD','CGRAD','CGRW','CGRAF',  &
        'EOPD','TWUPD','WSPD','RDPD','RTLD','SRAD','PARDAY','PARDSL','PARDSH','RADTOT','NSTRES','LAWD'
-                                                                                         
-       !paste(repeat('lamx',imax),1:imax,imax,len('lamx'))
-  write(noutlai, '(A5, 1X,A3, 2(1X,A5), <imax>(1X,A6))') '@YEAR', 'DOY', 'DAS', 'DAP', lfhead(1:imax)    
+  write(noutlai, '(A5, 1X,A3, 2(1X,A5), 50(1X,A6))') '@YEAR', 'DOY', 'DAS', 'DAP', lfhead(1:imax)    
         
        
 !----------------------------------------------------------------------
@@ -171,7 +168,7 @@ else if(dynamic==output) then
                 srad,parday,parsunday,parshday,radtotday,(1.-nstres),lawd
      !lamax(1:imax), 
      !gddlabeg(1:5), gddlaend(1:5)
-     write(noutlai, '(1X,I4, 1X,I3, 2(1X,I5), <imax>(1X,F6.1))') year, doy, das, dap, greenla(1:imax)
+     write(noutlai, '(1X,I4, 1X,I3, 2(1X,I5), 50(1X,F6.1))') year, doy, das, dap, greenla(1:imax)
   end if
         
 !----------------------------------------------------------------------

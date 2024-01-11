@@ -35,18 +35,15 @@ save
 !----------------------------------------------------------------------
 ! Define variables
 !----------------------------------------------------------------------
-integer, parameter :: lenla = 50  
-real, parameter :: &
-cans  = 4.5,       &
-scvp  = 0.2,       &
-tincr = 24.0/ts,   &
-insp  = 4.514,     &
-as    = 288.615,   &
-cvx   = -75.774,   &
-pi    = 3.14159,   &
-rad   = pi/180.0,  &
-pang  = 64.0,      &
-cm2tom2 = 1.0E-4
+integer, parameter :: lenla = 50
+real, parameter :: cans  = 4.5
+real, parameter :: scvp  = 0.2
+real, parameter :: tincr = 24.0/ts
+real, parameter :: insp  = 4.514
+real, parameter :: as    = 288.615
+real, parameter :: cvx   = -75.774
+real, parameter :: pang  = 64.0
+real, parameter :: cm2tom2 = 1.0E-4
 integer, intent(in) :: lfn
 real, intent(in)  :: sw(nl), gddae, dvs
 real, intent(in), dimension(lenla)  :: lflon, lamaxpot    
@@ -176,10 +173,10 @@ do i = 1, lfn
    if(greenla(i) < 0.0) greenla(i) = 0.0
    hlai = hlai + cm2tom2*greenla(i)*pltpop    
    if(lapot(i) >= 0.8*lamaxpot(i)) then
-	  lfln = (((insp*greenla(i)+as) - ((insp*greenla(i)+as)**2.0 - (4.0*insp*greenla(i)*as*cvx))**0.5)/(2.0*cvx))
-	  lflp = lfln * cos(pang*rad)
-	  canw = lflp * 2.0/100.0
-	  canwh = min(max(canwh,canw),rowspmeter)
+     lfln = (((insp*greenla(i)+as) - ((insp*greenla(i)+as)**2.0 - (4.0*insp*greenla(i)*as*cvx))**0.5)/(2.0*cvx))
+     lflp = lfln * cos(pang*rad)
+     canw = lflp * 2.0/100.0
+     canwh = min(max(canwh,canw),rowspmeter)
    end if
 end do
 if(canht > 0.0  .and. canht < 0.01) canht = 0.01
@@ -234,7 +231,7 @@ do h = 1, ts
         lapot, lflon, lfn, light, parsh, parsun, tairhr(h), lamaxpot, sgfun, gasfn,   & !Input
         pghr)                                                                           !Output
      
-   !Integrate instantaneous canopy photoynthesis (µmol[CO2]/m2/s) to get daily values (g[CO2]/m2/day)
+   !Integrate instantaneous canopy photoynthesis (ï¿½mol[CO2]/m2/s) to get daily values (g[CO2]/m2/day)
    !1 mol[CO2] = 44 g[CO2] so 1umol[CO2] = 44.10-6g[CO2] and 1umol[CO2]/s = 44.10-6 x 3600 g[CO2]/hr
    pgday = pgday + tincr*pghr*44.0*0.0036
 end do
@@ -275,7 +272,7 @@ end subroutine MZ_AG_Photsynt
 !------------------------------------------------------------------------------------------------------------------------------
 ! amtrh        Hourly atmospheric transmission coefficient or ratio of solar:extraterrestrial radiation - 
 ! as           Asymptote of the leaf length vs. leaf area relationship                                  cm
-! asmax        Maximum instantaneous assimilation at 30 degC                                            µmol[CO2]/m2/s
+! asmax        Maximum instantaneous assimilation at 30 degC                                            ï¿½mol[CO2]/m2/s
 ! azir         Row azimuth relative to North                                                            degrees
 ! azzon(h)     Hourly solar azimuth (+/- from South)                                                    degrees
 ! beta(h)      Hourly solar elevation (+/- from horizontal)                                             degrees
@@ -314,20 +311,20 @@ end subroutine MZ_AG_Photsynt
 ! palb         Plant albedo accounting for soil water in the first soil layer                           -
 ! palbd        Intermediary plant albedo calculation                                                    -
 ! pang         Average angle of leaves with the horizontal                                              degrees
-! parhr(h)     Hourly photosynthetically active radiation (PAR)                                         µmol[quanta]/m2/s
-! parsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                µmol[quanta]/m2/s
-! parsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                µmol[quanta]/m2/s
+! parhr(h)     Hourly photosynthetically active radiation (PAR)                                         ï¿½mol[quanta]/m2/s
+! parsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                ï¿½mol[quanta]/m2/s
+! parsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                ï¿½mol[quanta]/m2/s
 ! pathsr       Directory containing (or path to ) the species file                                      -                 
 ! pg           Daily canopy gross assimilation (glucose equivalent)                                     g[glucose]/m2/day
 ! pgday        Daily canopy gross assimilation (CO2 uptake)                                             g[CO2]/m2/day
-! pghr         Canopy instantaneous gross assimilation                                                  µmol[CO2]/m2/s
+! pghr         Canopy instantaneous gross assimilation                                                  ï¿½mol[CO2]/m2/s
 ! pgross       Daily canopy gross assimilation (glucose equivalent in kg/ha/day)                        kg[glucose]/ha/day
 ! pi           Mathematical constant pi                                                                 -
 ! plaish(l)    Shaded leaf area index for leaf l                                                        m2/m2
 ! plaisl(l)    Shaded leaf area index for leaf l                                                        m2/m2
 ! pltpop       Plant density                                                                            plants/m2
 ! rad          Constant for converting angles from degrees to radians                                   radians/degree
-! radtot       Sum of PAR components (energy balance check: should equal parhr)                         µmol[quanta]/m2/s
+! radtot       Sum of PAR components (energy balance check: should equal parhr)                         ï¿½mol[quanta]/m2/s
 ! rate         Program control variable to execute code to compute daily rate variables (value=3)
 ! rowspmeter   Row spacing in meter                                                                     m
 ! salb         Soil albedo                                                                              -

@@ -368,7 +368,7 @@ else if(dynamic == seasend) then
        bwah, sdwtah)                                                                !Output
        
   ! Copy daily output file to filex's directory
-  call copy_file('*.OUT', trim(pathex))
+  !call copy_file('*.OUT', trim(pathex))
   !call copy_file(outaltmz, trim(pathex)//outaltmz)
 
   

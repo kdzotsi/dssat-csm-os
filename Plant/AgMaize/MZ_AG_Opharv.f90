@@ -7,7 +7,7 @@
 ! Revision History
 ! 03/05/2013 KAD Written (based on MZ_Opharv)
 !----------------------------------------------------------------------
-! Called from: Main program: MZ_AG_GLOBAL
+! Called from: Main program: MZ_AG_AGMAIZE
 ! Calls      : None
 ! Utility subroutines called: reada (in reads.for), yr_doy
 !======================================================================================
@@ -26,7 +26,7 @@ type(ControlType), intent(in):: control
 type(SwitchType),  intent(in):: iswitch
 type(FileioType) :: datafileio
 
-! Variables to write to GM_GroStages.OUT
+! Variables to write to GroStages.OUT
 character, dimension(10) :: gstddes*30, gstddoyObs*3
 integer, dimension(10)   :: gstddoySim, gstdyearSim, gstdnum
 real, dimension(10)      :: growthtlu
@@ -38,7 +38,7 @@ character(len=6), dimension(EvaluateNum) :: olab, X
 logical :: gstdfexist
 integer :: i, exptrt, trtnum, year, doy, gstdunit
 
-! Arrays with simulated data to be printed in a summary file and to the console
+! Arrays with simulated values to be printed in a summary file and to the console
 integer, parameter :: sumnum = 17
 character(len=4), dimension(sumnum) :: label
 real, dimension(sumnum) :: SimValues
@@ -59,8 +59,16 @@ ideto   = iswitch % ideto
 idets   = iswitch % idets
 
 ! Define growth stages
-gstddes(1:10) = ['Germination','Emergence','End of Juvenile Phase','Tassel Initiation','Appearance of Topmost Leaf',  &
-                 'Anthesis','Silking','Onset of Linear Grain Filling','50% Milk Line','Black Layer']  
+gstddes(1:10) = ['Germination                   ', & 
+                 'Emergence                     ', & 
+                 'End of Juvenile Phase         ', & 
+                 'Tassel Initiation             ', & 
+                 'Appearance of Topmost Leaf    ',  &
+                 'Anthesis                      ', & 
+                 'Silking                       ', & 
+                 'Onset of Linear Grain Filling ', & 
+                 '50% Milk Line                 ', & 
+                 'Black Layer                   ']  
 gstdnum(1:10) = [(i, i=1,10, 1)]  
 
 ! Define olab: vector of headers in FILEA; 1.ADAT(anthesis date); 4.MDAT(Maturity date); 22.EDAT(Emergence date)

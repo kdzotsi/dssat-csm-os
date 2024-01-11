@@ -516,6 +516,7 @@ C  03/11/2005 GH  Remove ANS, RNMODE and NYRS
 C  08/09/2012 GH  Updated for cassava
 C  09/18/2020 GH  Update for quinoa, safflower, sunflower
 C  07/08/2022 GH  Update for cucumber
+!  01/10/2024 KAD Updated for AgMaize
 C-----------------------------------------------------------------------
 C  INPUT  : IDETO,NOUTDO,NYRS,LL,DUL,SAT,DLAYR,SWINIT,DS,NLAYR,ESW
 C           SHF,BD,PH,INO3,INH4,OC,TLL,TDUL,TSAT,TPESW,TSWINI,AINO3,AINH4
@@ -788,8 +789,8 @@ c          WRITE (HEADER(I),'(2F6.0,F6.2)') PHINT, LLIFA, STFR
       !     AgMaize
             CASE ('MZAGM')
                READ(PLAINTXT, 3000) CRMAT, RLAMX, TAINT, GFPYR, PHOTP,
-     &                            LFTOP, LALFX, AMPLI, ASYMP, SGFUN, 
-     &                            KNPOT, PGRMN, GASFN
+     &                              LFTOP, LALFX, AMPLI, ASYMP, SGFUN, 
+     &                              KNPOT, PGRMN, GASFN
                WRITE(HEADER(I), 3001) CRMAT,RLAMX,TAINT,GFPYR,PHOTP; I=I+1
                WRITE(HEADER(I), 3002) LFTOP,LALFX,AMPLI,ASYMP,SGFUN; I=I+1
                WRITE(HEADER(I), 3003) KNPOT,PGRMN,GASFN; I=I+1

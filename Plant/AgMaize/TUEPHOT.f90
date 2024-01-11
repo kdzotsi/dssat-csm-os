@@ -168,17 +168,14 @@ save
 ! Define variables
 !----------------------------------------------------------------------
 integer, parameter :: lenla = 50  
-real, parameter ::   &
-cans    = 4.5,       &
-scvp    = 0.2,       &
-tincr   = 24.0/ts,   &
-insp    = 4.514,     &
-as      = 288.615,   &
-cvx     = -75.774,   &
-pi      = 3.14159,   &
-rad     = pi/180.0,  &
-pang    = 64.0,      &
-cm2tom2 = 1.0E-4
+real, parameter :: cans = 4.5
+real, parameter :: scvp    = 0.2
+real, parameter :: tincr   = 24.0/ts
+real, parameter :: insp    = 4.514
+real, parameter :: as      = 288.615
+real, parameter :: cvx     = -75.774
+real, parameter :: pang    = 64.0
+real, parameter :: cm2tom2 = 1.0E-4
 integer, intent(in) :: lfn
 real, intent(in)  :: sw(nl), gddae, dvs
 real, intent(in), dimension(lenla)  :: lflon, lamaxpot    
@@ -302,10 +299,10 @@ do i = 1, lfn
    if(greenla(i) < 0.0) greenla(i) = 0.0
    hlai = hlai + cm2tom2*greenla(i)*pltpop    
    if(lapot(i) >= 0.8*lamaxpot(i)) then
-	  lfln = (((insp*greenla(i)+as) - ((insp*greenla(i)+as)**2.0 - (4.0*insp*greenla(i)*as*cvx))**0.5)/(2.0*cvx))
-	  lflp = lfln * cos(pang*rad)
-	  canw = lflp * 2.0/100.0
-	  canwh = min(max(canwh,canw),rowspmeter)
+     lfln = (((insp*greenla(i)+as) - ((insp*greenla(i)+as)**2.0 - (4.0*insp*greenla(i)*as*cvx))**0.5)/(2.0*cvx))
+     lflp = lfln * cos(pang*rad)
+     canw = lflp * 2.0/100.0
+     canwh = min(max(canwh,canw),rowspmeter)
    end if
 end do
 if(canht > 0.0  .and. canht < 0.01) canht = 0.01
@@ -329,8 +326,8 @@ do h = 1, ts
    !mult  = 5.0 - 4.0*turfac
    !amplt = (25.0+(100.0-25.0)*exp(-3.5*(1.0-amtrh(h))))*mult
    !froll = amin1(turfac+(real(h)-14.0)**2.0/amplt,1.0)
-   froll = 1.0	
-	    
+   froll = 1.0
+
    !Calculate real and solar time
    hs = real(h) * tincr
    if(hs > snup .and. hs < sndn) then
@@ -360,7 +357,7 @@ do h = 1, ts
         lapot, lflon, lfn, light, parsh, parsun, tairhr(h), lamaxpot, sgfun, gasfn,   & !Input
         pghr)                                                                           !Output
      
-   !Integrate instantaneous canopy photoynthesis (µmol[CO2]/m2/s) to get daily values (g[CO2]/m2/day)
+   !Integrate instantaneous canopy photoynthesis (ï¿½mol[CO2]/m2/s) to get daily values (g[CO2]/m2/day)
    !1 mol[CO2] = 44 g[CO2] so 1umol[CO2] = 44.10-6g[CO2] and 1umol[CO2]/s = 44.10-6 x 3600 g[CO2]/hr
    pgday = pgday + tincr*pghr*44.0*0.0036
 end do
@@ -401,7 +398,7 @@ end subroutine MZ_TUE_Photsynt
 !------------------------------------------------------------------------------------------------------------------------------
 ! amtrh        Hourly atmospheric transmission coefficient or ratio of solar:extraterrestrial radiation - 
 ! as           Asymptote of the leaf length vs. leaf area relationship                                  cm
-! asmax        Maximum instantaneous assimilation at 30 degC                                            µmol[CO2]/m2/s
+! asmax        Maximum instantaneous assimilation at 30 degC                                            ï¿½mol[CO2]/m2/s
 ! azir         Row azimuth relative to North                                                            degrees
 ! azzon(h)     Hourly solar azimuth (+/- from South)                                                    degrees
 ! beta(h)      Hourly solar elevation (+/- from horizontal)                                             degrees
@@ -440,20 +437,20 @@ end subroutine MZ_TUE_Photsynt
 ! palb         Plant albedo accounting for soil water in the first soil layer                           -
 ! palbd        Intermediary plant albedo calculation                                                    -
 ! pang         Average angle of leaves with the horizontal                                              degrees
-! parhr(h)     Hourly photosynthetically active radiation (PAR)                                         µmol[quanta]/m2/s
-! parsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                µmol[quanta]/m2/s
-! parsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                µmol[quanta]/m2/s
+! parhr(h)     Hourly photosynthetically active radiation (PAR)                                         ï¿½mol[quanta]/m2/s
+! parsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                ï¿½mol[quanta]/m2/s
+! parsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                ï¿½mol[quanta]/m2/s
 ! pathsr       Directory containing (or path to ) the species file                                      -                 
 ! pg           Daily canopy gross assimilation (glucose equivalent)                                     g[glucose]/m2/day
 ! pgday        Daily canopy gross assimilation (CO2 uptake)                                             g[CO2]/m2/day
-! pghr         Canopy instantaneous gross assimilation                                                  µmol[CO2]/m2/s
+! pghr         Canopy instantaneous gross assimilation                                                  ï¿½mol[CO2]/m2/s
 ! pgross       Daily canopy gross assimilation (glucose equivalent in kg/ha/day)                        kg[glucose]/ha/day
 ! pi           Mathematical constant pi                                                                 -
 ! plaish(l)    Shaded leaf area index for leaf l                                                        m2/m2
 ! plaisl(l)    Shaded leaf area index for leaf l                                                        m2/m2
 ! pltpop       Plant density                                                                            plants/m2
 ! rad          Constant for converting angles from degrees to radians                                   radians/degree
-! radtot       Sum of PAR components (energy balance check: should equal parhr)                         µmol[quanta]/m2/s
+! radtot       Sum of PAR components (energy balance check: should equal parhr)                         ï¿½mol[quanta]/m2/s
 ! rate         Program control variable to execute code to compute daily rate variables (value=3)
 ! rowspmeter   Row spacing in meter                                                                     m
 ! salb         Soil albedo                                                                              -
@@ -656,16 +653,16 @@ end subroutine MZ_TUE_Radabs
 ! laislv       Sunlit leaf area index for vertical sun position                                         m2[leaf]/m2[ground]
 ! lfn          Total leaf number rounded up                                                             -
 ! palb         Plant albedo accounting for soil water in the first soil layer                           -
-! parh         Hourly photosynthetically active radiation (PAR)                                         µmol[quanta]/m2/s
-! parsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                µmol[quanta]/m2/s
-! parsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                µmol[quanta]/m2/s
+! parh         Hourly photosynthetically active radiation (PAR)                                         ï¿½mol[quanta]/m2/s
+! parsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                ï¿½mol[quanta]/m2/s
+! parsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                ï¿½mol[quanta]/m2/s
 ! pcabsp       Hourly percent absorbed photosynthetic radiation                                         %
 ! pcintp       Hourly percent intercepted photosynthetic radiation                                      %
 ! pcrefp       Hourly percent reflected photosynthetic radiation                                        %
 ! plaish(l)    Shaded leaf area index for leaf l                                                        m2/m2
 ! plaisl(l)    Sunlit leaf area index for leaf l                                                        m2/m2
 ! pltpop       Plant density                                                                            plants/m2
-! radtot       Sum of PAR components (energy balance check: should equal parh)                          µmol[quanta]/m2/s
+! radtot       Sum of PAR components (energy balance check: should equal parh)                          ï¿½mol[quanta]/m2/s
 ! rowspc       Row spacing                                                                              m
 ! scvp         Scattering coefficient used to calculate diffuse reflectance
 ! xc           Parameter X for calculating black layer extinction coefficient                           -
@@ -1091,33 +1088,33 @@ do l = lfn, 1, -1
       cumash = addfsh + adifsh + arefsh
 
       !-Determine per-leaf sunlit and shaded LAI and sunlit and shaded PAR
-	  plaisl(l) = ylaisl - uylaisl
-	  plaish(l) = ylaish - uylaish
+     plaisl(l) = ylaisl - uylaisl
+     plaish(l) = ylaish - uylaish
 
-	  if(plaisl(l) < 1e-4) then
-	     radsun(l) = 0.0
-	  else
-	     radsun(l) = (cumasun-ucumasun)/plaisl(l)
-	  end if
+     if(plaisl(l) < 1e-4) then
+        radsun(l) = 0.0
+     else
+       radsun(l) = (cumasun-ucumasun)/plaisl(l)
+     end if
 	  
-	  if(plaish(l) == 0.0) then
-	     radsh(l) = 0.0
-	  else
-	     radsh(l) = (cumash-ucumash)/plaish(l)
-	  end if
+     if(plaish(l) == 0.0) then
+        radsh(l) = 0.0
+     else
+       radsh(l) = (cumash-ucumash)/plaish(l)
+     end if
       
       !-Save current LAI and cumulative radiation values for next iteration
-	  uylaish = ylaish
-	  uylaisl = ylaisl
-	  ucumasun = cumasun
-	  ucumash = cumash
+     uylaish = ylaish
+     uylaisl = ylaisl
+     ucumasun = cumasun
+     ucumash = cumash
 	  
 	  !-KAD 09/24/2013 - Save different absorbed radiation components for checking
-	  arefhr(l) = aref
-	  adifhr(l) = adif
-	  addrhr(l) = addr
-	  addfhr(l) = addf
-	  leafnum(l) = l
+     arefhr(l) = aref
+     adifhr(l) = adif
+     addrhr(l) = addr
+     addfhr(l) = addf
+     leafnum(l) = l
    end if
 end do
 ! JIL End of per-leaf loop
@@ -1143,63 +1140,63 @@ end subroutine MZ_TUE_Canabs
 !==============================================================================================================================
 ! Variable definitions                                                                                  Unit 
 !------------------------------------------------------------------------------------------------------------------------------	  
-! addf         Absorbed direct PAR that is scattered and becomes diffuse                                µmol[quanta]/m2/s
-! addfsh       Absorbed direct PAR in the shaded LAI that is scattered and becomes diffuse              µmol[quanta]/m2/s
-! addfsl       Absorbed direct PAR in the sunlit LAI that is scattered and becomes diffuse              µmol[quanta]/m2/s
-! addr         Absorbed direct PAR that is not scattered                                                µmol[quanta]/m2/s
-! addrsl       Absorbed direct PAR in the sunlit LAI that is not scattered                              µmol[quanta]/m2/s
-! adif         Total absorbed diffuse PAR                                                               µmol[quanta]/m2/s
-! adifsh       Diffuse PAR captured by shaded LAI                                                       µmol[quanta]/m2/s
-! adifsl       Diffuse PAR captured by sunlit LAI                                                       µmol[quanta]/m2/s
-! adir         Total absorbed direct PAR                                                                µmol[quanta]/m2/s
-! adirsl       Direct PAR captured by sunlit LAI                                                        µmol[quanta]/m2/s
+! addf         Absorbed direct PAR that is scattered and becomes diffuse                                ï¿½mol[quanta]/m2/s
+! addfsh       Absorbed direct PAR in the shaded LAI that is scattered and becomes diffuse              ï¿½mol[quanta]/m2/s
+! addfsl       Absorbed direct PAR in the sunlit LAI that is scattered and becomes diffuse              ï¿½mol[quanta]/m2/s
+! addr         Absorbed direct PAR that is not scattered                                                ï¿½mol[quanta]/m2/s
+! addrsl       Absorbed direct PAR in the sunlit LAI that is not scattered                              ï¿½mol[quanta]/m2/s
+! adif         Total absorbed diffuse PAR                                                               ï¿½mol[quanta]/m2/s
+! adifsh       Diffuse PAR captured by shaded LAI                                                       ï¿½mol[quanta]/m2/s
+! adifsl       Diffuse PAR captured by sunlit LAI                                                       ï¿½mol[quanta]/m2/s
+! adir         Total absorbed direct PAR                                                                ï¿½mol[quanta]/m2/s
+! adirsl       Direct PAR captured by sunlit LAI                                                        ï¿½mol[quanta]/m2/s
 ! albedo       Plant albedo accounting for soil water in the first soil layer                           -
-! aref         Total canopy absorption from the soil-reflected PAR                                      µmol[quanta]/m2/s
-! arefsh       Shaded LAI PAR absorption from the soil-reflected PAR                                    µmol[quanta]/m2/s
-! arefsl       Sunlit LAI PAR absorption from the soil-reflected PAR                                    µmol[quanta]/m2/s
-! atot         Total PAR absorbed by the canopy                                                         µmol[quanta]/m2/s
+! aref         Total canopy absorption from the soil-reflected PAR                                      ï¿½mol[quanta]/m2/s
+! arefsh       Shaded LAI PAR absorption from the soil-reflected PAR                                    ï¿½mol[quanta]/m2/s
+! arefsl       Sunlit LAI PAR absorption from the soil-reflected PAR                                    ï¿½mol[quanta]/m2/s
+! atot         Total PAR absorbed by the canopy                                                         ï¿½mol[quanta]/m2/s
 ! beta         Hourly solar elevation (+/- from horizontal)                                             degrees
 ! betn         Spacing between plants along a row                                                       m
 ! canht        Canopy height                                                                            m
 ! canwh        Canopy width                                                                             m
-! cumash       Cumulative PAR absorbed by shaded LAI (down to current leaf)                             µmol[quanta]/m2/s
-! cumasun      Cumulative PAR absorbed by sunlit LAI (down to current leaf)                             µmol[quanta]/m2/s
+! cumash       Cumulative PAR absorbed by shaded LAI (down to current leaf)                             ï¿½mol[quanta]/m2/s
+! cumasun      Cumulative PAR absorbed by sunlit LAI (down to current leaf)                             ï¿½mol[quanta]/m2/s
 ! difpr        Fraction of sky "seen" by plants
 ! fracsh       Fraction of land shaded by the canopy (during daytime)
 ! frdif        Fraction diffuse photon flux density after correcting for circumsolar 
 !              radiation (Spitters, 1986) 
 ! froll        Leaf rolling factor associated with soil water stress affecting cell expansion           -
 ! gla(l)       Green leaf area for leaf l                                                               cm2
-! incsoi       Total PAR intercepted by the soil                                                        µmol[quanta]/m2/s
-! intcan       Total PAR intercepted by the canopy                                                      µmol[quanta]/m2/s
+! incsoi       Total PAR intercepted by the soil                                                        ï¿½mol[quanta]/m2/s
+! intcan       Total PAR intercepted by the canopy                                                      ï¿½mol[quanta]/m2/s
 ! kdifbl       Extinction coefficient of black leaves to diffuse radiation
 ! kdirbl       Extinction coefficient of black leaves to direct radiation 
 ! l            Integer loop counter
 ! lfn          Total leaf number rounded up                                                             -
-! parh         Hourly photosynthetically active radiation (PAR)                                         µmol[quanta]/m2/s
-! pctabs       Percent of total PAR absorbed by the canopy                                              µmol[quanta]/m2/s
-! pctint       Percent of total PAR intercepted by the canopy                                           µmol[quanta]/m2/s
-! pctref       Percent of total PAR reflected by the canopy and the soil                                µmol[quanta]/m2/s
+! parh         Hourly photosynthetically active radiation (PAR)                                         ï¿½mol[quanta]/m2/s
+! pctabs       Percent of total PAR absorbed by the canopy                                              ï¿½mol[quanta]/m2/s
+! pctint       Percent of total PAR intercepted by the canopy                                           ï¿½mol[quanta]/m2/s
+! pctref       Percent of total PAR reflected by the canopy and the soil                                ï¿½mol[quanta]/m2/s
 ! plaish(l)    Shaded leaf area index for leaf l                                                        m2[leaf]/m2[ground]
 ! plaisl(l)    Sunlit leaf area index for leaf l                                                        m2[leaf]/m2[ground]
 ! pltpop       Plant density                                                                            plants/m2
-! raddif       Hourly diffuse PAR                                                                       µmol[quanta]/m2/s
-! raddir       Hourly direct PAR                                                                        µmol[quanta]/m2/s
-! radsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                µmol[quanta]/m2/s
-! radss        Radiation on soil                                                                        µmol[quanta]/m2/s
-! radsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                µmol[quanta]/m2/s
-! radtot       Sum of PAR components (energy balance check: should equal parh)                          µmol[quanta]/m2/s
-! rdifsl       Total diffuse PAR absorbed by sunlit LAI                                                 µmol[quanta]/m2/s
-! refdif       Canopy-reflected diffuse PAR                                                             µmol[quanta]/m2/s
-! refdir       Canopy-reflected direct PAR                                                              µmol[quanta]/m2/s
+! raddif       Hourly diffuse PAR                                                                       ï¿½mol[quanta]/m2/s
+! raddir       Hourly direct PAR                                                                        ï¿½mol[quanta]/m2/s
+! radsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                ï¿½mol[quanta]/m2/s
+! radss        Radiation on soil                                                                        ï¿½mol[quanta]/m2/s
+! radsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                ï¿½mol[quanta]/m2/s
+! radtot       Sum of PAR components (energy balance check: should equal parh)                          ï¿½mol[quanta]/m2/s
+! rdifsl       Total diffuse PAR absorbed by sunlit LAI                                                 ï¿½mol[quanta]/m2/s
+! refdif       Canopy-reflected diffuse PAR                                                             ï¿½mol[quanta]/m2/s
+! refdir       Canopy-reflected direct PAR                                                              ï¿½mol[quanta]/m2/s
 ! refdr        Reflection coefficient for direct radiation
 ! refdf        Reflection coefficient for diffuse radiation
-! refsoi       Diffuse PAR reflected from the soil                                                      µmol[quanta]/m2/s
-! reftot       Total PAR reflected by the canopy and the soil                                           µmol[quanta]/m2/s
+! refsoi       Diffuse PAR reflected from the soil                                                      ï¿½mol[quanta]/m2/s
+! reftot       Total PAR reflected by the canopy and the soil                                           ï¿½mol[quanta]/m2/s
 ! rowspc       Row spacing                                                                              m
 ! scvr         Scattering coefficient used to calculate diffuse reflectance
-! ucumash      Cumulative PAR absorbed by shaded LAI (down to previous leaf)                            µmol[quanta]/m2/s
-! ucumasun     Cumulative PAR absorbed by sunlit LAI (down to previous leaf)                            µmol[quanta]/m2/s
+! ucumash      Cumulative PAR absorbed by shaded LAI (down to previous leaf)                            ï¿½mol[quanta]/m2/s
+! ucumasun     Cumulative PAR absorbed by sunlit LAI (down to previous leaf)                            ï¿½mol[quanta]/m2/s
 ! uylaish      Cumulative shaded LAI from top to bottom of canopy (down to previous leaf)               m2[leaf]/m2[ground]
 ! uylaisl      Cumulative sunlit LAI from top to bottom of canopy (down to previous leaf)               m2[leaf]/m2[ground]
 ! yhlai        Cumulative leaf area index from top to bottom of canopy                                  m2[leaf]/m2[ground]
@@ -1211,7 +1208,7 @@ end subroutine MZ_TUE_Canabs
 
 !=======================================================================
 !  Iphotsynt, Subroutine, J.I. Lizaso
-!  Calculates instantaneous plant photosynthesis (µmol CO2/m2 s) of 
+!  Calculates instantaneous plant photosynthesis (ï¿½mol CO2/m2 s) of 
 !  shaded and sunlit leaf area on a per-leaf basis and integrates for
 !  the whole canopy
 !  Adapted from CANOPG by K.J. Boote, J.W. Jones, G. Hoogenboom
@@ -1283,7 +1280,7 @@ do i = 1, lfn
    call MZ_TUE_PSLeaf(parsh(i), assat(i), intslp(i), cvxty(i),    &  !Input
                      pgsh(i))                                       !Output
   
-   !Compute instantaneous canopy gross photosynthesis (µmol[CO2]/m2/s)
+   !Compute instantaneous canopy gross photosynthesis (ï¿½mol[CO2]/m2/s)
    pghr = pghr + pgsl(i)*plaisl(i) + pgsh(i)*plaish(i)
    end if
 end do
@@ -1303,11 +1300,11 @@ end subroutine MZ_TUE_Iphotsynt
 ! cvxty(l)     Ratio of the diffusion resistance to the total resistance to CO2 (curvature              -
 !              parameter for the light response curve) for leaf l
 ! dynamic      Main control variable to tell each module which section of code to run                   -
-! asmax        Maximum instantaneous assimilation at 30 degC                                            µmol[CO2]/m2[leaf]/s
+! asmax        Maximum instantaneous assimilation at 30 degC                                            ï¿½mol[CO2]/m2[leaf]/s
 ! gddae        Cumulative growing degree day after emergence                                            degree-days
 ! gla(l)       Green leaf area for leaf l                                                               cm2
 ! i            Iteration counter of leaf number                                                         -
-! intslp(l)    Quantum efficiency of CO2 assimilation (initial slope of the light response              µmol[CO2]/µmol[quanta]
+! intslp(l)    Quantum efficiency of CO2 assimilation (initial slope of the light response              ï¿½mol[CO2]/ï¿½mol[quanta]
 !              curve) for leaf l
 ! plaish(l)    Shaded leaf area index for leaf l                                                        m2/m2
 ! plaisl(l)    Shaded leaf area index for leaf l                                                        m2/m2
@@ -1317,10 +1314,10 @@ end subroutine MZ_TUE_Iphotsynt
 ! light        Logical variable that differentiates daytime from nighttime
 ! parsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                J/m2/s
 ! parsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                J/m2/s
-! pghr         Canopy instantaneous gross assimilation                                                  µmol[CO2]/m2[ground]/s
-! pgsh(l)      Shaded photosynthesis for leaf l                                                         µmol[CO2]/m2[leaf]/s
-! pgsl(l)      Sunlit photosynthesis for leaf l                                                         µmol[CO2]/m2[leaf]/s 
-! pgsun(l)     Sunlit photosynthesis for leaf l (intermediary variable)                                 µmol[CO2]/m2[leaf]/s 
+! pghr         Canopy instantaneous gross assimilation                                                  ï¿½mol[CO2]/m2[ground]/s
+! pgsh(l)      Shaded photosynthesis for leaf l                                                         ï¿½mol[CO2]/m2[leaf]/s
+! pgsl(l)      Sunlit photosynthesis for leaf l                                                         ï¿½mol[CO2]/m2[leaf]/s 
+! pgsun(l)     Sunlit photosynthesis for leaf l (intermediary variable)                                 ï¿½mol[CO2]/m2[leaf]/s 
 ! tairh(h)     Hourly air temperature                                                                   degrees   
 ! yx(l)        Maximum value of potential leaf area for leaf l (when fully expanded)                    cm2
 !==============================================================================================================================
@@ -1456,7 +1453,7 @@ end if
 
 do i = 1, lfn
    assat(i)  = asat(i)*asf*asfn*1.0
-   intslp(i) = insl(i)*isf*1.0	
+   intslp(i) = insl(i)*isf*1.0
    cvxty(i)  = cvty(i)*cxf*1.0
 end do
 
@@ -1464,7 +1461,7 @@ end if       !Endif for DYNAMIC LOOP
 
 return
 
-end	subroutine MZ_TUE_PSParam     
+end subroutine MZ_TUE_PSParam     
 
 
 !==============================================================================================================================
@@ -1476,8 +1473,8 @@ end	subroutine MZ_TUE_PSParam
 ! asf          Relative effect of temperature on the light-saturated assimilation rate                  -
 ! asfn         Relative effect of night temperature on the light-saturated assimilation rate
 ! asat(l)      Light-saturated assimilation rate for leaf l (no temperature effect applied)             umol[CO2]/m2[leaf]/s
-! asmax        Maximum instantaneous assimilation at 30 degC                                            µmol[CO2]/m2[leaf]/s
-! assat(l)     Light-saturated assimilation rate (corresponds to the asymptote of the light             µmol[CO2]/m2[leaf]/s
+! asmax        Maximum instantaneous assimilation at 30 degC                                            ï¿½mol[CO2]/m2[leaf]/s
+! assat(l)     Light-saturated assimilation rate (corresponds to the asymptote of the light             ï¿½mol[CO2]/m2[leaf]/s
 !              response curve) for leaf l
 ! axx          "Upper end" of the sigmoid relatiohsip between light-saturated assimilation rate
 !              and leaf age
@@ -1500,8 +1497,8 @@ end	subroutine MZ_TUE_PSParam
 ! gddae        Cumulative growing degree days after emergence                                           degree-days
 ! gla(l)       Green leaf area for leaf l                                                               cm2
 ! i            Iteration counter of leaf number                                                         -
-! insl(l)      Quantum efficiency of CO2 assimilation for leaf l (no temperature effect applied)        µmol[CO2]/µmol[quanta]
-! intslp(l)    Quantum efficiency of CO2 assimilation (initial slope of the light response              µmol[CO2]/µmol[quanta]
+! insl(l)      Quantum efficiency of CO2 assimilation for leaf l (no temperature effect applied)        ï¿½mol[CO2]/ï¿½mol[quanta]
+! intslp(l)    Quantum efficiency of CO2 assimilation (initial slope of the light response              ï¿½mol[CO2]/ï¿½mol[quanta]
 !              curve) for leaf l
 ! isf          Relative effect of temperature on the quantum efficiency of CO2 assimilation             -
 ! lap(l)       Potential leaf area of leaf l from tip appearance to full expansion                      cm2
@@ -1517,8 +1514,8 @@ end	subroutine MZ_TUE_PSParam
 
 !=======================================================================
 !  MZ_AG_PSLeaf, Subroutine, J.I. Lizaso
-!  Calculates gross photosynthesis (µmol CO2/m2 s) per unit leaf area as
-!  a function of instantaneous PAR (µmol/m2 s)
+!  Calculates gross photosynthesis (ï¿½mol CO2/m2 s) per unit leaf area as
+!  a function of instantaneous PAR (ï¿½mol/m2 s)
 !  Adapted from PGLEAF by K.J.Boote, J.W.Jones, G.Hoogenboom
 !-----------------------------------------------------------------------
 !  REVISION HISTORY
@@ -1561,13 +1558,13 @@ end subroutine MZ_TUE_PSLeaf
 ! Variable definitions                                                                                  Unit 
 !------------------------------------------------------------------------------------------------------------------------------
 ! a, b and c   Parameters of a generalized non-rectangular hyperbolae                                       
-! ast          Light-saturated assimilation rate (corresponds to the asymptote of the light             µmol[CO2]/m2[leaf]/s
+! ast          Light-saturated assimilation rate (corresponds to the asymptote of the light             ï¿½mol[CO2]/m2[leaf]/s
 !              response curve)
 ! cvt          Ratio of the diffusion resistance to the total resistance to CO2 (curvature              -
 !              parameter for the light response curve)
-! isp          Quantum efficiency of CO2 assimilation (initial slope of the light response curve)       µmol[CO2]/µmol[quanta]
-! parlf        Photosynthetically active radiation absorbed by leaf                                     µmol[quanta]/m2/s
-! pglf         Instantaneous CO2 assimilation                                                           µmol[CO2]/m2[leaf]/s 
+! isp          Quantum efficiency of CO2 assimilation (initial slope of the light response curve)       ï¿½mol[CO2]/ï¿½mol[quanta]
+! parlf        Photosynthetically active radiation absorbed by leaf                                     ï¿½mol[quanta]/m2/s
+! pglf         Instantaneous CO2 assimilation                                                           ï¿½mol[CO2]/m2[leaf]/s 
 !==============================================================================================================================
 
 

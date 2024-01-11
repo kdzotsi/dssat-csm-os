@@ -33,6 +33,7 @@ C             CHP Added TRTNUM to CONTROL variable.
 !  08/08/2017 WP  Version identification moved to CSMVersion.for
 !  08/08/2017 WP  Definitions related with OS platform moved to OSDefinitions.for
 !  05/28/2021 FO  Added code for LAT,LONG and ELEV output in Summary.OUT
+!  01/10/2024 KAD Added AgMaize variables to support transpiration-use efficiency method
 !=======================================================================
 
       MODULE ModuleDefs
@@ -447,7 +448,7 @@ C             CHP Added TRTNUM to CONTROL variable.
         INTEGER NR5, iSTAGE, iSTGDOY
         CHARACTER*10 iSTNAME
 
-        !AgMaize variables for transpiration use efficiency method, KD 6/27/2014
+        !AgMaize variables for transpiration use efficiency method, KD 01/10/2024
         INTEGER :: lfn, gstd
         REAL :: gddae, dvs, cgrf, wlvtop, wlvbot, wst, weolg, wrt, cgrw
         REAL, DIMENSION(50) :: greenla, lflon, lamaxpot, lapot

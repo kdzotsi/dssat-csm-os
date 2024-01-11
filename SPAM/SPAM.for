@@ -24,6 +24,8 @@ C  04/01/2004 CHP/US Added Penman - Meyer routine for potential ET
 !  10/16/2020 CHP Cumulative "soil" evaporation includes mulch and flood evap
 !  01/26/2023 CHP Reduce compile warnings: add EXTERNAL stmts, remove 
 !                 unused variables, shorten lines. 
+!  01/10/2024 KAD Added support for water-use-efficiency-based transpiration for use
+!                 by AgMaize
 C-----------------------------------------------------------------------
 C  Called by: Main
 C  Calls:     XTRACT, OPSPAM    (File SPSUBS.for)

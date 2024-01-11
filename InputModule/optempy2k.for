@@ -39,6 +39,7 @@ C  06/07/2002 GH  Modifed for Y2K Output
 !  05/09/2013 CHP/FR/JZW Added N-wheat module
 !  03/20/2018 Created new FORMAT to read in CUL file for tef
 !  01/21/2020 JG moved some CUL parameters to ECO file
+!  01/10/2024 KAD Added AgMaize model
 C-----------------------------------------------------------------------
 C  INPUT  : YRIC,PRCROP,WRESR,WRESND,EFINOC,EFNFIX,SWINIT,INH4,INO3,
 C           TOTN,NYRS,VARNO,VRNAME,CROP,MODEL,PATHMO,ECONO,FROP,RUN,FILEIO
@@ -679,6 +680,12 @@ C-----------------------------------------------------------------------
         CASE('MZIXM')
             WRITE (LUNIO,1801,IOSTAT=ERRNUM) VARNO,VRNAME,ECONO,
      &                    P1,P2,P5,G2,G3,PHINT,AX,LX,LFN
+
+!       AgMaize 
+        CASE('MZAGM')
+            WRITE (LUNIO,'(A6,1X,A16,1X,A6,A)',IOSTAT=ERRNUM) VARNO, VRNAME, 
+     &                   ECONO, trim(PLAINTXT)
+
 !       Ceres sorghum
         CASE('SGCER')
                WRITE (LUNIO,1900,IOSTAT=ERRNUM) VARNO,VRNAME,ECONO,

@@ -26,6 +26,7 @@ C  08/09/2012 GH  Updated for cassava
 !  05/09/2013 CHP/FR/JZW Added N-wheat module
 !  01/21/2020 JG moved some CUL parameters to ECO file
 !  10/20/2020 FV added SUOIL (OilcropSun)
+!  01/10/2024 KAD Added AgMaize model
 C-----------------------------------------------------------------------
 C  INPUT  : FILEG,NSENS,VARNO,VARTY,VRNAME,PATHGE,ECONO
 C
@@ -239,6 +240,11 @@ C-LPM  Add CIAT cassava model
       CASE ('MZCER','SWCER')
         READ (C360,'(A6,1X,A16,7X,A6,6F6.0)',IOSTAT=ERRNUM)
      &            VARTY,VRNAME,ECONO,P1,P2,P5,G2,G3,PHINT
+
+!     AgMaize
+      CASE ('MZAGM')
+        READ (C360,'(A6,1X,A16,7X,A6,A)',IOSTAT=ERRNUM) 
+     &            VARTY,VRNAME,ECONO, PLAINTXT 
 
 !WDB 7/2016 Added cultivar coefficients for sugar beet model
       CASE ('BSCER')       

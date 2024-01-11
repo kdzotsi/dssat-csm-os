@@ -635,19 +635,19 @@
 ! Copies a file file_name to file_name_new
 ! file_name and file_name_new must include the path information and may include wildcard characters
 !-----------------------------------------------------------------------
-   subroutine copy_file(file_name, file_name_new)
-      use ifport 
-      implicit none
-      character(*), intent(in) :: file_name, file_name_new 
-      character(len=1000) :: fnam
-      integer :: l, len1, len2
-      logical(4) :: logical_result
+   ! subroutine copy_file(file_name, file_name_new)
+   !    use ifport 
+   !    implicit none
+   !    character(*), intent(in) :: file_name, file_name_new 
+   !    character(len=1000) :: fnam
+   !    integer :: l, len1, len2
+   !    logical(4) :: logical_result
       
-      len1 = len_trim(file_name); len2 = len_trim(file_name_new)
-      fnam = 'copy/y ' // file_name(1:len1) // ' ' // file_name_new(1:len2) // ' > nul'
-      l = len_trim(fnam)
-      logical_result = systemqq(fnam(1:l))
-   end subroutine copy_file
+   !    len1 = len_trim(file_name); len2 = len_trim(file_name_new)
+   !    fnam = 'copy/y ' // file_name(1:len1) // ' ' // file_name_new(1:len2) // ' > nul'
+   !    l = len_trim(fnam)
+   !    logical_result = systemqq(fnam(1:l))
+   ! end subroutine copy_file
 
 !-----------------------------------------------------------------------
 ! Function getcoltlu to compute collar tlu 

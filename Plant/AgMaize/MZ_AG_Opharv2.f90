@@ -32,15 +32,14 @@ subroutine MZ_AG_Opharv2(control, iswitch,                                      
     bwah, sdwtah)                                                                 !Output
 
 !-----------------------------------------------------------------------
-Use ModuleDefs 
+use ModuleDefs 
 use MZ_AG_ModuleDefs    
 implicit none
 save
 !-----------------------------------------------------------------------
 real, parameter :: cm2tom2=1E-4  
-character :: ideto*1, idets*1, iplti*1, rnmode*1, crop*2, stname*10(20), filea*12, pathex*80, desclist*6(5)
 integer ::  growthStage, run, timdif, lfmax, i, j, igst,iobsdat, ilist(5), glist(5), dsimdat(5), dobsdat(5)
-integer :: dynamic, isens, found, mdate, trtnum, yrdoy, yrsim, yrplt, trt_rot, gstdyrdoySim(20)
+integer :: dynamic, isens, mdate, trtnum, yrdoy, yrsim, yrplt, trt_rot, gstdyrdoySim(20)
 real :: agefac, wtnvg, bwah, bwam, cannaa, tadrwAnth, tadrwSilk, wtnsd, kn, hi, StovSenes, maxlai, greenla(50) 
 real :: greenlaSilk(50), nstres, we, psdwt, Pstres1, Pstres2, sdrate, sdwt, sdwtah, harvfrac(2), grain, tlu, tnleaf, nleaf
 real :: sdwtam, pltpop, laitop, seedno, skerwt, stover, swfac, tadrw, turfac, wtncan, wtnup, pcngrn, xhlai
@@ -52,10 +51,9 @@ real, dimension(sumnum) :: value
 
 ! Arrays which contain Simulated and Measured data for printing in OVERVIEW.OUT and EVALUATE.OUT files (OPVIEW subroutine)
 integer acount
-character*6, dimension(EvaluateNum) :: olab, olap     !OLAP in dap
-character*6 X(EvaluateNum)
-character*8 Simulated(EvaluateNum), Measured(EvaluateNum)
-character*50 descrip(EvaluateNum)
+character(len=6), dimension(EvaluateNum) :: olab, olap, X     !OLAP in dap
+character(len=8), dimension(EvaluateNum) :: Simulated, Measured
+character(len=50), dimension(EvaluateNum):: descrip
 
 type(ControlType) control
 type(SwitchType) iswitch
@@ -64,6 +62,13 @@ type(FileioType) :: datafileio
 
 ! Variables added for environmental and stress factors output
 Type (PlStresType) PlantStres
+
+character(len=1) :: rnmode, iplti, ideto, idets
+character(len=2) :: crop
+character(len=6), dimension(5) :: desclist
+character(len=10), dimension(20):: stname
+character(len=12) :: filea
+character(len=80) :: pathex
 
 dynamic = control % dynamic
 crop    = control % crop
