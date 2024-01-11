@@ -13,196 +13,195 @@
 ! TODO:
 ! 1. Compute xstage correctly for nitrogen simulations
 !======================================================================================
-subroutine MZ_AG_Phenol(control, iswitch, SoilProp, weather, yrplt, sw, st, snow, cgr, nfac,     & !Input
-  gti, tlu, tnleafrm, tnleaf, anthes, silk, olg, dvs, dvsrate, growthStage, tmpa, rla, gddcer,   & !Output
-  dtt, gddae, gddten, gddapsim, mdate, gstdyrdoySim, gstddoySim, gstdyearSim, growthtlu,         & !Output
-  tnleafphot, tnleaftemp, stLayer1, rlaSoil, rlaAir, lfnc, coltlu, xstage)                         !Output
-!----------------------------------------------------------------------  
-use ModuleDefs
-use ModuleData
-use MZ_AG_ModuleDefs
-implicit none
-save
+subroutine MZ_AG_Phenol(control, iswitch, SoilProp, weather, yrplt, sw, st, snow, cgr, nfac, & !Input
+                        gti, tlu, tnleafrm, tnleaf, anthes, silk, olg, dvs, dvsrate, growthStage, tmpa, rla, gddcer, & !Output
+                        dtt, gddae, gddten, gddapsim, mdate, gstdyrdoySim, gstddoySim, gstdyearSim, growthtlu, & !Output
+                        tnleafphot, tnleaftemp, stLayer1, rlaSoil, rlaAir, lfnc, coltlu, xstage)                         !Output
 !----------------------------------------------------------------------
-real,    intent(in)  :: sw(nl), snow, cgr
-integer, intent(in)  :: yrplt
-integer, intent(out) :: growthStage, mdate, gstdyrdoySim(20), gstddoySim(20), gstdyearSim(20)
-real,    intent(out) :: gti, tlu, tnleaf, anthes, silk, olg, dvs, dvsrate, growthtlu(10),         &
+   use ModuleDefs
+   use ModuleData
+   use MZ_AG_ModuleDefs
+   implicit none
+   save
+!----------------------------------------------------------------------
+   real, intent(in)  :: sw(nl), snow, cgr
+   integer, intent(in)  :: yrplt
+   integer, intent(out) :: growthStage, mdate, gstdyrdoySim(20), gstddoySim(20), gstdyearSim(20)
+   real, intent(out) :: gti, tlu, tnleaf, anthes, silk, olg, dvs, dvsrate, growthtlu(10), &
                         tmpa, rla, gddcer, gddae, dtt, gddten, gddapsim, tnleafphot, tnleaftemp
-                        
-! Constructed variables 
-type (ControlType), intent(in) :: control
-type (SoilType),    intent(in) :: SoilProp
-type (SwitchType),  intent(in) :: iswitch
-type (WeatherType), intent(in) :: weather   
-!type (MulchType),   intent(in) :: mulch   
-type(FileioType)  :: datafileio     
-type(EcotypeType) :: ecofileout             
-type(SpeciesType) :: dataspecies  
 
-! Variables from constructed types 
-character(len=1) iswwat
-integer :: dynamic, yrdoy, yrsim, nlayr
-real :: tmax, tmin, srad, dayl, dlayr(nl), ll(nl)
+! Constructed variables
+   type(ControlType), intent(in) :: control
+   type(SoilType), intent(in) :: SoilProp
+   type(SwitchType), intent(in) :: iswitch
+   type(WeatherType), intent(in) :: weather
+!type (MulchType),   intent(in) :: mulch
+   type(FileioType)  :: datafileio
+   type(EcotypeType) :: ecofileout
+   type(SpeciesType) :: dataspecies
+
+! Variables from constructed types
+   character(len=1) iswwat
+   integer :: dynamic, yrdoy, yrsim, nlayr
+   real :: tmax, tmin, srad, dayl, dlayr(nl), ll(nl)
 
 ! Input / parameters
-character :: econo*6, filee*12, files*12, pather*80, pathsr*80
-real :: sdepth, crmat, rlamax, taint, gfpyr, photp, lftop, pltpop, TCeiling, TOptRla, TMinRla, milk, blackl,  &
-        xtemp(5), ygdd(5), swcg, tbase, topt, ropt, tnleafrm, anthesrm, nfac, rlanfac, rlaNStres
+   character :: econo*6, filee*12, files*12, pather*80, pathsr*80
+   real :: sdepth, crmat, rlamax, taint, gfpyr, photp, lftop, pltpop, TCeiling, TOptRla, TMinRla, milk, blackl, &
+           xtemp(5), ygdd(5), swcg, tbase, topt, ropt, tnleafrm, anthesrm, nfac, rlanfac, rlaNStres
 
 ! Other variables/parameters
-real, parameter :: tothirty = 30.0, tbten = 10.0
-real :: meant, cumpdw, pgrasi, delayr(8), sumr, tsum, mrad, swsd, dvs_silk, rlatmpa, xstage
-real :: gtirate, asi, gfp, rlan, rlad, rlaf, rlafs, rlaft, cumdep, lfnc, coltlu, coltlu_2
-integer :: doytnleaf, dcount, L, L0, i, year, doy, lfn
-real :: st(nl), stLayer1, srftemp, rlaAir, rlaSoil       !EPIC's soil temperature calculation
+   real, parameter :: tothirty = 30.0, tbten = 10.0
+   real :: meant, cumpdw, pgrasi, delayr(8), sumr, tsum, mrad, swsd, dvs_silk, rlatmpa, xstage
+   real :: gtirate, asi, gfp, rlan, rlad, rlaf, rlafs, rlaft, cumdep, lfnc, coltlu, coltlu_2
+   integer :: doytnleaf, dcount, L, L0, i, year, doy, lfn
+   real :: st(nl), stLayer1, srftemp, rlaAir, rlaSoil       !EPIC's soil temperature calculation
 
 ! Functions
-integer timdif
-real         &     !Real functions
-fnleafap,    &     !Function for computing rate of leaf appearance (see end of subroutine)
-fnrla,       &     !New function for computing rate of leaf appearance (see end of subroutine)
-fnrlaDaily,  &
-dailyttapsim, tempthreehr,     &   !Functions for computing APSIM's thermal time accumulator
-getgddcer, getgddten, getgti,  &   !Functions for computing GDD8, GDD[30,10] and GTI thermal accumulators
-getcoltlu
+   integer timdif
+   real &     !Real functions
+      fnleafap, &     !Function for computing rate of leaf appearance (see end of subroutine)
+      fnrla, &     !New function for computing rate of leaf appearance (see end of subroutine)
+      fnrlaDaily, &
+      dailyttapsim, tempthreehr, &   !Functions for computing APSIM's thermal time accumulator
+      getgddcer, getgddten, getgti, &   !Functions for computing GDD8, GDD[30,10] and GTI thermal accumulators
+      getcoltlu
 
 ! Transfer values from constructed data types into local variables
-dynamic = control % dynamic
-yrdoy   = control % yrdoy
-yrsim   = control % yrsim
-tmax    = weather % tmax
-tmin    = weather % tmin
-srad    = weather % srad 
-dayl    = weather % dayl
-dlayr   = SoilProp % dlayr
-ll      = SoilProp % ll
-nlayr   = SoilProp % nlayr
-iswwat  = iswitch % iswwat
+   dynamic = control%dynamic
+   yrdoy = control%yrdoy
+   yrsim = control%yrsim
+   tmax = weather%tmax
+   tmin = weather%tmin
+   srad = weather%srad
+   dayl = weather%dayl
+   dlayr = SoilProp%dlayr
+   ll = SoilProp%ll
+   nlayr = SoilProp%nlayr
+   iswwat = iswitch%iswwat
 
 !----------------------------------------------------------------------
 ! Dynamic = runinit or dynamic = seasinit
 !---------------------------------------------------------------------
-if(dynamic==runinit .or. dynamic==seasinit) then
- !Read all sections of fileio and transfer variables
- call readfileio(control, 'ALLSEC', datafileio)
- filee = datafileio  % filee
- files  = datafileio % files
- pather = datafileio % pather 
- pathsr = datafileio % pathsr
- sdepth = datafileio % sdepth 
- crmat  = datafileio % crmat
- rlamax = datafileio % rlamx
- taint  = datafileio % taint
- gfpyr  = datafileio % gfpyr
- photp  = datafileio % photp
- lftop  = datafileio % lftop
- pltpop = datafileio % pltpop
- econo  = datafileio % econo
- 
- !Read all sections of the species file and transfer variables
- call readspecies(files, pathsr, 'ALLSEC', dataspecies)
- !Transfer phenology parameters 
- TCeiling = dataspecies % tceil
- TOptRla  = dataspecies % torla
- TMinRla  = dataspecies % tbrla
- milk     = dataspecies % mldvs
- blackl   = dataspecies % bldvs
- 
- !Transfer APSIM thermal time parameters 
- xtemp = dataspecies % xtemp
- ygdd  = dataspecies % ygdd
- 
- !Transfer seed germination parameters 
- swcg = dataspecies % swcg
- 
- !Read ecotype file and transfer variables
- call readecotype(pather, filee, econo, ecofileout)
- tbase = ecofileout % tbase
- topt  = ecofileout % topt
- ropt  = ecofileout % ropt
- 
- !Initialize variables
- !GFP is duration of grain filling period (in gti) assuming photoperiod 15.1 h and mean temperature 
- !is 19oC during photoperiod and temperature sensitive period. One thermal leaf unit (tlu) = 28 gti 
- !during grain filling period. OLG is onset of period of linear rate of grain filling (dvs)
- anthesrm = 0.12 * crmat + 10.5                   !In TLU
- gfp =  max(2.23 * crmat + 418.0 + gfpyr, 1.0)    !In GTI
- tnleafrm = anthesrm - taint
- tnleaf = tnleafrm
- anthes = anthesrm             !Also, = tnleaf + taint. So, anthes does not depend on taint!                                      
- silk = anthes 
- olg = 1.3
- gti = 0.0
- tlu = 0.0
- dvsrate = 0.0
- dvs = 0.0
- xstage = 0.0
- tmpa = 0.0
- rla = 0.0
- gddcer = 0.0
- gddae = 0.0
- dtt = 0.0
- gddten = 0.0
- gddapsim = 0.0
- mdate = -99
- rlaf = 1.0
- tnleafphot = 0.0
- tnleaftemp = 0.0
- stLayer1 = 0.0
- rlaSoil = 0.0
- rlaAir = 0.0
- cumpdw = 0.0
- pgrasi = 0.0
- delayr = 0.0
- tsum = 0.0
- asi = 0.0
- lfnc = 0.0
- coltlu = 0.0
- coltlu_2 = 0.0
- dcount = 0
- meant = 0.0
- swsd = 0.0
- doytnleaf = 0
- gstddoySim = 0
- gstdyearSim = 0
- gstdyrdoySim = 0
- growthtlu = 0.0
- growthStage = 14
- call yr_doy(yrsim, year, doy)
- gstdyrdoySim(14) = yrsim
- gstdyearSim(14) = year
- gstddoySim(14) = doy 
-   
-!----------------------------------------------------------------------
-! Dynamic = rate 
-!----------------------------------------------------------------------
-else if(dynamic == rate) then
+   if (dynamic == runinit .or. dynamic == seasinit) then
+      !Read all sections of fileio and transfer variables
+      call readfileio(control, 'ALLSEC', datafileio)
+      filee = datafileio%filee
+      files = datafileio%files
+      pather = datafileio%pather
+      pathsr = datafileio%pathsr
+      sdepth = datafileio%sdepth
+      crmat = datafileio%crmat
+      rlamax = datafileio%rlamx
+      taint = datafileio%taint
+      gfpyr = datafileio%gfpyr
+      photp = datafileio%photp
+      lftop = datafileio%lftop
+      pltpop = datafileio%pltpop
+      econo = datafileio%econo
 
+      !Read all sections of the species file and transfer variables
+      call readspecies(files, pathsr, 'ALLSEC', dataspecies)
+      !Transfer phenology parameters
+      TCeiling = dataspecies%tceil
+      TOptRla = dataspecies%torla
+      TMinRla = dataspecies%tbrla
+      milk = dataspecies%mldvs
+      blackl = dataspecies%bldvs
 
-!----------------------------------------------------------------------
-! Dynamic = integrate 
-!----------------------------------------------------------------------
-else if(dynamic == integr) then 
+      !Transfer APSIM thermal time parameters
+      xtemp = dataspecies%xtemp
+      ygdd = dataspecies%ygdd
 
-!---Check if crop is planted  
-if(yrdoy <= yrplt) then
-   if(yrdoy == yrsim) then
+      !Transfer seed germination parameters
+      swcg = dataspecies%swcg
+
+      !Read ecotype file and transfer variables
+      call readecotype(pather, filee, econo, ecofileout)
+      tbase = ecofileout%tbase
+      topt = ecofileout%topt
+      ropt = ecofileout%ropt
+
+      !Initialize variables
+      !GFP is duration of grain filling period (in gti) assuming photoperiod 15.1 h and mean temperature
+      !is 19oC during photoperiod and temperature sensitive period. One thermal leaf unit (tlu) = 28 gti
+      !during grain filling period. OLG is onset of period of linear rate of grain filling (dvs)
+      anthesrm = 0.12*crmat + 10.5                   !In TLU
+      gfp = max(2.23*crmat + 418.0 + gfpyr, 1.0)    !In GTI
+      tnleafrm = anthesrm - taint
+      tnleaf = tnleafrm
+      anthes = anthesrm             !Also, = tnleaf + taint. So, anthes does not depend on taint!
+      silk = anthes
+      olg = 1.3
+      gti = 0.0
+      tlu = 0.0
+      dvsrate = 0.0
+      dvs = 0.0
+      xstage = 0.0
+      tmpa = 0.0
+      rla = 0.0
+      gddcer = 0.0
+      gddae = 0.0
+      dtt = 0.0
+      gddten = 0.0
+      gddapsim = 0.0
+      mdate = -99
+      rlaf = 1.0
+      tnleafphot = 0.0
+      tnleaftemp = 0.0
+      stLayer1 = 0.0
+      rlaSoil = 0.0
+      rlaAir = 0.0
+      cumpdw = 0.0
+      pgrasi = 0.0
+      delayr = 0.0
+      tsum = 0.0
+      asi = 0.0
+      lfnc = 0.0
+      coltlu = 0.0
+      coltlu_2 = 0.0
+      dcount = 0
+      meant = 0.0
+      swsd = 0.0
+      doytnleaf = 0
+      gstddoySim = 0
+      gstdyearSim = 0
+      gstdyrdoySim = 0
+      growthtlu = 0.0
       growthStage = 14
-      gstdyrdoySim(growthStage) = yrdoy 
-      call yr_doy(yrdoy, year, doy)
-      gstdyearSim(growthStage) = year
-      gstddoySim(growthStage) = doy
-   end if
-   if(yrdoy == yrplt) then
-      growthStage = 13
-      gstdyrdoySim(growthStage) = yrdoy 
-      call yr_doy(yrdoy, year, doy)
-      gstdyearSim(growthStage) = year
-      gstddoySim(growthStage) = doy            
-   end if
-   return
-end if      
+      call yr_doy(yrsim, year, doy)
+      gstdyrdoySim(14) = yrsim
+      gstdyearSim(14) = year
+      gstddoySim(14) = doy
+
+!----------------------------------------------------------------------
+! Dynamic = rate
+!----------------------------------------------------------------------
+   else if (dynamic == rate) then
+
+!----------------------------------------------------------------------
+! Dynamic = integrate
+!----------------------------------------------------------------------
+   else if (dynamic == integr) then
+
+!---Check if crop is planted
+      if (yrdoy <= yrplt) then
+         if (yrdoy == yrsim) then
+            growthStage = 14
+            gstdyrdoySim(growthStage) = yrdoy
+            call yr_doy(yrdoy, year, doy)
+            gstdyearSim(growthStage) = year
+            gstddoySim(growthStage) = doy
+         end if
+         if (yrdoy == yrplt) then
+            growthStage = 13
+            gstdyrdoySim(growthStage) = yrdoy
+            call yr_doy(yrdoy, year, doy)
+            gstdyearSim(growthStage) = year
+            gstddoySim(growthStage) = doy
+         end if
+         return
+      end if
 
 !This was just for running the soil water balance several days prior to planting
 ! if(yrdoy <= yrplt) then
@@ -210,510 +209,506 @@ end if
 !                         srftemp, st)                                              !Output
 !    return
 ! end if
- 
+
 !---On the first day after planting check conditions for germination; do this only if growthStage is still at planting
- NOTGERMINATE: if(growthStage==13) then
-    cumdep = 0.0
-    do L = 1, nlayr
-       cumdep = cumdep + dlayr(L)
-       if(cumdep > sdepth) exit      !Could use >= instead of >
-    end do
-    L0 = L                           !L0 is layer that seed is in
- 
-    !If water stress is not simulated, crop germinates 1 dap; if water stress is simulated crop can still germinate 1 dap
-    !but germination is controlled by soil moisture status
-    if(iswwat /= 'N') then
-       if(sw(L0) <= ll(L0)) then
-          swsd = (sw(L0)-ll(L0))*0.65 + (sw(L0+1)-ll(L0+1))*0.35
-          if(swsd >= swcg) growthStage = 1     !Germinate when soil water >= swcg; swcg = 0.02 cm3/cm3
-       else
-          growthStage = 1     
-       end if
-    else
-       growthStage = 1
-    end if
- end if NOTGERMINATE
+      NOTGERMINATE: if (growthStage == 13) then
+         cumdep = 0.0
+         do L = 1, nlayr
+            cumdep = cumdep + dlayr(L)
+            if (cumdep > sdepth) exit      !Could use >= instead of >
+         end do
+         L0 = L                           !L0 is layer that seed is in
 
-!---On the day of germination, start computing the rate of leaf appearance and different thermal time accumulators 
- GERMINATE: if(growthStage >= 1) then
- 
-    tmpa = (tmax + tmin)/2 
-   
-!---Rate of Leaf tip Appearence (RLA)     
-    !Mean incident solar radiation during the last week     
-    !BEG:SUGGESTED CODE IMPROVEMENT---
-    delayr(8) = srad    
-    !delayr(8) = srad   
-    !delayr(1:7) = [(delayr(i+1), i=1,7)]
-    !sumr = sum(delayr(1:7))    
-    sumr = 0.0
-    do i = 1, 7    !previous 7 days
-       delayr(i) = delayr(i+1)
-       sumr = sumr + delayr(i)
-    end do
-    !END:SUGGESTED CODE IMPROVEMENT---
-    
-    !BEG:SUGGESTED CODE IMPROVEMENT---
-    !mrad = sumr / min(timdif(yrplt,yrdoy),7)
-    if(timdif(yrplt,yrdoy) >= 7) then 
-       mrad = sumr / 7 
-    else 
-       mrad = sumr / timdif(yrplt,yrdoy)
-    end if
-    !END:SUGGESTED CODE IMPROVEMENT---
-  
-    !Compute rate of leaf appearance factor (rlaf)   
-    if(tlu <= 3.0) then 
-       rlaf = 1. - (0.1*(3. - tlu) / 3.)
-    else if(tlu <= 12.) then
-       !BEG:SUGGESTED CODE IMPROVEMENT---
-       rlafs = 0.01*min(max(mrad,10.0),20.0) + 0.9
-       !if(mrad >= 20.0) then
-       !   rlaf = 1.15
-       !else if(mrad >= 10.0) then
-       !   rlaf = 1.0 + 0.15 * (mrad - 10.0) / 10.0 
-       !else 
-       !   rlaf = 1.0
-       !end if
-       !END:SUGGESTED CODE IMPROVEMENT---
-       !if(rlaf < 1.15 - 0.15 * (12. - tlu) / 9.) rlaf = 1.15 - 0.15 * (12. - tlu) / (9.*3.)  
-       rlaft = 1.1 - 0.1 * (12. - tlu) / 9.      
-       rlaf = min(rlafs, rlaft)
-    else 
-       rlaf = 1.1
-    end if   
-    
-    !- Compute rate of leaf appearance reduced by nitrogen stress
-    rlanfac = 0.4*nfac + 0.6    !RLA reduction factor due to nitrogen stress
+         !If water stress is not simulated, crop germinates 1 dap; if water stress is simulated crop can still germinate 1 dap
+         !but germination is controlled by soil moisture status
+         if (iswwat /= 'N') then
+            if (sw(L0) <= ll(L0)) then
+               swsd = (sw(L0) - ll(L0))*0.65 + (sw(L0 + 1) - ll(L0 + 1))*0.35
+               if (swsd >= swcg) growthStage = 1     !Germinate when soil water >= swcg; swcg = 0.02 cm3/cm3
+            else
+               growthStage = 1
+            end if
+         else
+            growthStage = 1
+         end if
+      end if NOTGERMINATE
 
-    !---03/18/2013 - Use EPIC's soil average soil temperature to compute rla if tlu < 8
-    ! Define which RLA to use based on the leaf stage
-    if(tlu < 8.0) then       
-       !Use EPIC's soil average soil temperature to compute rla if tlu < 8
-       stLayer1 = st(1)     
-       rlaSoil = rlanfac * rlaf * fnrla(rlamax, TCeiling, TOptRla, TMinRla, stLayer1)                        
-       rla = rlaSoil
-    else
-       !Compute RLA using max and min air temperatures
-       rlaAir = rlaf * fnrlaDaily(tmax, tmin, rlamax, TCeiling, TOptRla, TMinRla)
-       rla = rlaAir
-       if(tlu < tnleaf) rla = rlanfac * rlaAir
-    end if
-    
-    !- Compute rate of leaf appearance reduced by nitrogen stress
-    !if(tlu < tnleaf) then
-    !   rlanfac = 0.25*nfac + 0.75    !RLA reduction factor due to nitrogen stress
-    !   rlaNStres = rlaf * rlanfac * fnrlaDaily(tmax, tmin, rlamax, TCeiling, TOptRla, TMinRla)
-    !   rla = min(rla, rlaNStres)
-    !end if
-    
-    ! Integrate the thermal leaf unit
-    tlu = tlu + rla
-    
-    !-- General Thermal Index calculated here to use updated anthes and tlu
-    rlatmpa = fnrla(rlamax, TCeiling, TOptRla, TMinRla, tmpa)
-    gtirate = getgti(tmpa, tlu, anthes, rlatmpa)
-    gti = gti + gtirate        
-    
-    !---Calculation of daily Growing Degree Day accumulation (called here GDD[TOPT,TBASE] i.e. GDD[30,10])
-    gddten = gddten + getgddten(tmax, tmin, tothirty, tbten) 
-    
-    !-- Cumulative GDD8 for use in leaf area subroutine; calculated here to use updated anthes and tlu
-    dtt = getgddcer(tmax, tmin, topt, ropt, tbase, tlu, anthes, snow, srad, dayl)
-    gddcer = gddcer + dtt	
-    
-    !-- Get GDDAE for photosynthesis routine
-    if(growthStage >= 2) gddae = gddae + dtt
-      
-    !---Calculation of APSIM's thermal accumulator
-    gddapsim = gddapsim + dailyttapsim(tmax, tmin, xtemp, ygdd)       
+!---On the day of germination, start computing the rate of leaf appearance and different thermal time accumulators
+      GERMINATE: if (growthStage >= 1) then
 
- end if GERMINATE
-  
+         tmpa = (tmax + tmin)/2
+
+!---Rate of Leaf tip Appearence (RLA)
+         !Mean incident solar radiation during the last week
+         !BEG:SUGGESTED CODE IMPROVEMENT---
+         delayr(8) = srad
+         !delayr(8) = srad
+         !delayr(1:7) = [(delayr(i+1), i=1,7)]
+         !sumr = sum(delayr(1:7))
+         sumr = 0.0
+         do i = 1, 7    !previous 7 days
+            delayr(i) = delayr(i + 1)
+            sumr = sumr + delayr(i)
+         end do
+         !END:SUGGESTED CODE IMPROVEMENT---
+
+         !BEG:SUGGESTED CODE IMPROVEMENT---
+         !mrad = sumr / min(timdif(yrplt,yrdoy),7)
+         if (timdif(yrplt, yrdoy) >= 7) then
+            mrad = sumr/7
+         else
+            mrad = sumr/timdif(yrplt, yrdoy)
+         end if
+         !END:SUGGESTED CODE IMPROVEMENT---
+
+         !Compute rate of leaf appearance factor (rlaf)
+         if (tlu <= 3.0) then
+            rlaf = 1.-(0.1*(3.-tlu)/3.)
+         else if (tlu <= 12.) then
+            !BEG:SUGGESTED CODE IMPROVEMENT---
+            rlafs = 0.01*min(max(mrad, 10.0), 20.0) + 0.9
+            !if(mrad >= 20.0) then
+            !   rlaf = 1.15
+            !else if(mrad >= 10.0) then
+            !   rlaf = 1.0 + 0.15 * (mrad - 10.0) / 10.0
+            !else
+            !   rlaf = 1.0
+            !end if
+            !END:SUGGESTED CODE IMPROVEMENT---
+            !if(rlaf < 1.15 - 0.15 * (12. - tlu) / 9.) rlaf = 1.15 - 0.15 * (12. - tlu) / (9.*3.)
+            rlaft = 1.1 - 0.1*(12.-tlu)/9.
+            rlaf = min(rlafs, rlaft)
+         else
+            rlaf = 1.1
+         end if
+
+         !- Compute rate of leaf appearance reduced by nitrogen stress
+         rlanfac = 0.4*nfac + 0.6    !RLA reduction factor due to nitrogen stress
+
+         !---03/18/2013 - Use EPIC's soil average soil temperature to compute rla if tlu < 8
+         ! Define which RLA to use based on the leaf stage
+         if (tlu < 8.0) then
+            !Use EPIC's soil average soil temperature to compute rla if tlu < 8
+            stLayer1 = st(1)
+            rlaSoil = rlanfac*rlaf*fnrla(rlamax, TCeiling, TOptRla, TMinRla, stLayer1)
+            rla = rlaSoil
+         else
+            !Compute RLA using max and min air temperatures
+            rlaAir = rlaf*fnrlaDaily(tmax, tmin, rlamax, TCeiling, TOptRla, TMinRla)
+            rla = rlaAir
+            if (tlu < tnleaf) rla = rlanfac*rlaAir
+         end if
+
+         !- Compute rate of leaf appearance reduced by nitrogen stress
+         !if(tlu < tnleaf) then
+         !   rlanfac = 0.25*nfac + 0.75    !RLA reduction factor due to nitrogen stress
+         !   rlaNStres = rlaf * rlanfac * fnrlaDaily(tmax, tmin, rlamax, TCeiling, TOptRla, TMinRla)
+         !   rla = min(rla, rlaNStres)
+         !end if
+
+         ! Integrate the thermal leaf unit
+         tlu = tlu + rla
+
+         !-- General Thermal Index calculated here to use updated anthes and tlu
+         rlatmpa = fnrla(rlamax, TCeiling, TOptRla, TMinRla, tmpa)
+         gtirate = getgti(tmpa, tlu, anthes, rlatmpa)
+         gti = gti + gtirate
+
+         !---Calculation of daily Growing Degree Day accumulation (called here GDD[TOPT,TBASE] i.e. GDD[30,10])
+         gddten = gddten + getgddten(tmax, tmin, tothirty, tbten)
+
+         !-- Cumulative GDD8 for use in leaf area subroutine; calculated here to use updated anthes and tlu
+         dtt = getgddcer(tmax, tmin, topt, ropt, tbase, tlu, anthes, snow, srad, dayl)
+         gddcer = gddcer + dtt
+
+         !-- Get GDDAE for photosynthesis routine
+         if (growthStage >= 2) gddae = gddae + dtt
+
+         !---Calculation of APSIM's thermal accumulator
+         gddapsim = gddapsim + dailyttapsim(tmax, tmin, xtemp, ygdd)
+
+      end if GERMINATE
+
 !---Effect of photoperiod and temperature on final leaf number at growthStage 3
- JUVENILE: if(growthStage == 3) then
-   !Compute change in leaf number as a function of temperature (tnleaftemp)
-   dcount = dcount + 1	           !Number of days since the beginning of temperature and photoperiod sensitive phase
-   tsum = tsum + tmpa              !Cumulative mean temperature since the beginning of growth stage 3
-   meant = tsum / dcount           !Average of mean temperature since the beginning of growth stage 3
-   if(meant > 15.0) then 
-      tnleaftemp = 0.1*(meant - 15.0) - 0.5     !Grow 0.1 leaves for each degree C above 15 degrees C
-   else 
-      tnleaftemp = 0.2*(15.0 - meant) - 0.5     !Grow 0.2 leaves for each degree C below 15 degrees C
-   end if
-    
-   !Compute change in leaf number as a function of photoperiod (tnleafphot)
-   if(dayl < 12.5) then
-      tnleafphot = -3.5 * photp                      
-   else if(dayl <= 16.0) then
-      tnleafphot = (dayl - 16.0) * photp    
-   else
-      tnleafphot = 0.0             
-   end if
-    
-   !Compute number of extra leaves and add to total leaf number
-   tnleaf = tnleafrm + tnleaftemp + tnleafphot         !Update total number of leaves
-   anthes = tnleaf + taint                             !Leaf stage at anthesis (in tlu)
-   silk = anthes
+      JUVENILE: if (growthStage == 3) then
+         !Compute change in leaf number as a function of temperature (tnleaftemp)
+         dcount = dcount + 1                   !Number of days since the beginning of temperature and photoperiod sensitive phase
+         tsum = tsum + tmpa              !Cumulative mean temperature since the beginning of growth stage 3
+         meant = tsum/dcount           !Average of mean temperature since the beginning of growth stage 3
+         if (meant > 15.0) then
+            tnleaftemp = 0.1*(meant - 15.0) - 0.5     !Grow 0.1 leaves for each degree C above 15 degrees C
+         else
+            tnleaftemp = 0.2*(15.0 - meant) - 0.5     !Grow 0.2 leaves for each degree C below 15 degrees C
+         end if
 
- !---Tassel initiation to end of anthesis
- else if(growthStage == 4) then JUVENILE
-   silk = anthes
-   doytnleaf = yrdoy
+         !Compute change in leaf number as a function of photoperiod (tnleafphot)
+         if (dayl < 12.5) then
+            tnleafphot = -3.5*photp
+         else if (dayl <= 16.0) then
+            tnleafphot = (dayl - 16.0)*photp
+         else
+            tnleafphot = 0.0
+         end if
 
- else if(growthStage==5 .or. growthStage==6) then JUVENILE
-   !If tassel initiation was ever skipped
-   if(doytnleaf==0) doytnleaf = yrdoy  
-  
-   !Calculation of pgr for the estimation of asi
-   cumpdw = cumpdw + cgr/(pltpop*10)
-   pgrasi = cumpdw / timdif(doytnleaf, yrdoy)     
-   if(pgrasi >= 3.0) then 
-      asi = 0
-   else
-      asi = (3**(3.0-pgrasi) - 1.0)/5.0    !asi in tlu 
-   end if
-   silk = anthes + asi 
+         !Compute number of extra leaves and add to total leaf number
+         tnleaf = tnleafrm + tnleaftemp + tnleafphot         !Update total number of leaves
+         anthes = tnleaf + taint                             !Leaf stage at anthesis (in tlu)
+         silk = anthes
 
- end if JUVENILE
- 
- !-- Beginning of silking to maturity
- !Compute developmental stage (0 is planting, 1 is silking, and 2 is maturity)
- if(tlu <= silk .and. tlu > 0.) then
-    !dvsrate = rla/silk
-    !dvs = dvs + dvsrate
-    dvs = tlu/silk
-    dvs_silk = dvs
- else
-    !The GTI function uses anthes and not silk. This means that if asi > 1 day, gti start to accumulate
-    !before silking causing dvsrate to be large around silking (or usually on the day of silking)
-    dvsrate = gti/gfp
-    dvs = dvs_silk + dvsrate
- end if
- 
- !-- Compute xstage for nitrogen routines
- xstage = 5.0 * dvs                    !Temporary relationship
- 
- !-- Set growth stages: emergence to anthesis
- if(tlu >= 2.0 .and. tlu < 4.0) then
-    growthStage = 2                    !growthStage 2 is plant emergence
- else if(tlu >= 4.0 .and. tlu <= (0.63*(tnleaf-8.04)+2.88)) then
-    growthStage = 3                    !growthStage 3 is end of juvenile phase 
- else if(tlu > (0.63*(tnleaf-8.04)+2.88) .and. tlu < tnleaf) then
-    growthStage = 4                    !growthStage 4 is tassel initiation
- else if(tlu >= tnleaf .and. tlu < anthes) then
-    growthStage = 5                    !growthStage 5 is appearance of topmost leaf   
- else if(tlu >= anthes) then 
-    growthStage = 6                    !growthStage 6 is anthesis
- end if                  
- 
- !---Set growth stages: silking to black layer
- if(dvs >= 1.0)    growthStage = 7     !growthStage 7 is silking
- if(dvs >= olg)    growthStage = 8     !growthStage 8 is olg
- if(dvs >= milk)   growthStage = 9     !growthStage 9 is half milk line
- if(dvs >= blackl) growthStage = 10    !growthStage 10 is black layer
- 
- !---Compute collar TLU
- lfnc = tnleaf - lftop                        !Node position of the largest leaf
- lfn = ceiling(tnleaf)                        !Total leaf number rounded up
- if(aint(tlu) < tnleaf) then                  !If current leaf tip number < tnleaf)
-    coltlu = getcoltlu(tlu, lfnc)             !Continuous (for output)
-    coltlu_2 = getcoltlu(aint(tlu), lfnc)     !Stepwise
- else 
-    coltlu = coltlu_2 + tnleaf-real(lfn-1)
- end if           
+         !---Tassel initiation to end of anthesis
+         else if (growthStage == 4) then JUVENILE
+         silk = anthes
+         doytnleaf = yrdoy
 
- !---Save dates of current growth stages
- if(growthStage > 0) then
-    if(gstddoySim(growthStage)==0) then
-       call yr_doy(yrdoy, year, doy)
-       gstdyrdoySim(growthStage) = yrdoy
-       gstddoySim(growthStage) = doy
-       gstdyearSim(growthStage) = year
-       growthtlu(growthStage) = tlu
-       !For growth stages between 2 (emergence) and 10 (black layer), set the occurrence date of the previous
-       !stage to that of the current stage if both stages occur on the same date. An alternative way is to set
-       !stage dates as they occur but that would be a lot of code repetitions OR use a function
-       if(growthStage >= 2 .AND. growthStage <= 10) then
-          if(gstdyrdoySim(growthStage-1) == 0) then
-             gstdyrdoySim(growthStage-1) = gstdyrdoySim(growthStage)
-             gstddoySim(growthStage-1) = gstddoySim(growthStage)
-             gstdyearSim(growthStage-1) = gstdyearSim(growthStage)
-             growthtlu(growthStage-1) = growthtlu(growthStage)
-          end if
-       end if
-    end if   
- end if   
+         else if (growthStage == 5 .or. growthStage == 6) then JUVENILE
+         !If tassel initiation was ever skipped
+         if (doytnleaf == 0) doytnleaf = yrdoy
 
- !---Save variables for use in SPAM
- call put('PLANT','GDDAE', gddae)
- call put('PLANT','DVS'  , dvs)
- call put('PLANT','GSTD' , growthStage)
+         !Calculation of pgr for the estimation of asi
+         cumpdw = cumpdw + cgr/(pltpop*10)
+         pgrasi = cumpdw/timdif(doytnleaf, yrdoy)
+         if (pgrasi >= 3.0) then
+            asi = 0
+         else
+            asi = (3**(3.0 - pgrasi) - 1.0)/5.0    !asi in tlu
+         end if
+         silk = anthes + asi
 
- !---Get maturity date and stop model
- if(growthStage == 10) then
-    mdate = yrdoy
-    return
- end if
+      end if JUVENILE
 
- !---Output variables
- !yremrg = gstdyrdoySim(2)
- !isdate = gstdyrdoySim(7)
+      !-- Beginning of silking to maturity
+      !Compute developmental stage (0 is planting, 1 is silking, and 2 is maturity)
+      if (tlu <= silk .and. tlu > 0.) then
+         !dvsrate = rla/silk
+         !dvs = dvs + dvsrate
+         dvs = tlu/silk
+         dvs_silk = dvs
+      else
+         !The GTI function uses anthes and not silk. This means that if asi > 1 day, gti start to accumulate
+         !before silking causing dvsrate to be large around silking (or usually on the day of silking)
+         dvsrate = gti/gfp
+         dvs = dvs_silk + dvsrate
+      end if
 
-!----------------------------------------------------------------------
-! Dynamic = Output 
-!----------------------------------------------------------------------
-else if(dynamic == output) then 
+      !-- Compute xstage for nitrogen routines
+      xstage = 5.0*dvs                    !Temporary relationship
+
+      !-- Set growth stages: emergence to anthesis
+      if (tlu >= 2.0 .and. tlu < 4.0) then
+         growthStage = 2                    !growthStage 2 is plant emergence
+      else if (tlu >= 4.0 .and. tlu <= (0.63*(tnleaf - 8.04) + 2.88)) then
+         growthStage = 3                    !growthStage 3 is end of juvenile phase
+      else if (tlu > (0.63*(tnleaf - 8.04) + 2.88) .and. tlu < tnleaf) then
+         growthStage = 4                    !growthStage 4 is tassel initiation
+      else if (tlu >= tnleaf .and. tlu < anthes) then
+         growthStage = 5                    !growthStage 5 is appearance of topmost leaf
+      else if (tlu >= anthes) then
+         growthStage = 6                    !growthStage 6 is anthesis
+      end if
+
+      !---Set growth stages: silking to black layer
+      if (dvs >= 1.0) growthStage = 7     !growthStage 7 is silking
+      if (dvs >= olg) growthStage = 8     !growthStage 8 is olg
+      if (dvs >= milk) growthStage = 9     !growthStage 9 is half milk line
+      if (dvs >= blackl) growthStage = 10    !growthStage 10 is black layer
+
+      !---Compute collar TLU
+      lfnc = tnleaf - lftop                        !Node position of the largest leaf
+      lfn = ceiling(tnleaf)                        !Total leaf number rounded up
+      if (aint(tlu) < tnleaf) then                  !If current leaf tip number < tnleaf)
+         coltlu = getcoltlu(tlu, lfnc)             !Continuous (for output)
+         coltlu_2 = getcoltlu(aint(tlu), lfnc)     !Stepwise
+      else
+         coltlu = coltlu_2 + tnleaf - real(lfn - 1)
+      end if
+
+      !---Save dates of current growth stages
+      if (growthStage > 0) then
+         if (gstddoySim(growthStage) == 0) then
+            call yr_doy(yrdoy, year, doy)
+            gstdyrdoySim(growthStage) = yrdoy
+            gstddoySim(growthStage) = doy
+            gstdyearSim(growthStage) = year
+            growthtlu(growthStage) = tlu
+            !For growth stages between 2 (emergence) and 10 (black layer), set the occurrence date of the previous
+            !stage to that of the current stage if both stages occur on the same date. An alternative way is to set
+            !stage dates as they occur but that would be a lot of code repetitions OR use a function
+            if (growthStage >= 2 .AND. growthStage <= 10) then
+               if (gstdyrdoySim(growthStage - 1) == 0) then
+                  gstdyrdoySim(growthStage - 1) = gstdyrdoySim(growthStage)
+                  gstddoySim(growthStage - 1) = gstddoySim(growthStage)
+                  gstdyearSim(growthStage - 1) = gstdyearSim(growthStage)
+                  growthtlu(growthStage - 1) = growthtlu(growthStage)
+               end if
+            end if
+         end if
+      end if
+
+      !---Save variables for use in SPAM
+      call put('PLANT', 'GDDAE', gddae)
+      call put('PLANT', 'DVS', dvs)
+      call put('PLANT', 'GSTD', growthStage)
+
+      !---Get maturity date and stop model
+      if (growthStage == 10) then
+         mdate = yrdoy
+         return
+      end if
+
+      !---Output variables
+      !yremrg = gstdyrdoySim(2)
+      !isdate = gstdyrdoySim(7)
 
 !----------------------------------------------------------------------
-! Dynamic = Seasend 
+! Dynamic = Output
 !----------------------------------------------------------------------
-else if(dynamic == seasend) then 
+   else if (dynamic == output) then
+
+!----------------------------------------------------------------------
+! Dynamic = Seasend
+!----------------------------------------------------------------------
+   else if (dynamic == seasend) then
 
 !-----------------------------------------------------------------------
 ! End of dynamic if structure
 !-----------------------------------------------------------------------
-end if  
+   end if
 
 !----------------------------------------------------------------------
 ! End of subroutine
 !----------------------------------------------------------------------
-return
+   return
 end subroutine MZ_AG_Phenol
-      
-      
+
 !==============================================================================================================================
 ! Functions used in this leaf area subroutine
 !-----------------------------------------------------------------------
 ! Function for computing the rate of leaf appearance in phenology
 !-----------------------------------------------------------------------
- pure real function fnleafap(t)
-    real, intent(in) :: t
-    fnleafap = 0.0997 - 0.036*t + 0.00362*t**2 - 0.0000639*t**3
- end function fnleafap      
- 
+pure real function fnleafap(t)
+   real, intent(in) :: t
+   fnleafap = 0.0997 - 0.036*t + 0.00362*t**2 - 0.0000639*t**3
+end function fnleafap
+
 !-----------------------------------------------------------------------
 ! New generic function for computing the rate of leaf appearance 05/20/2013
 ! Temperature (Temp) can be daily or hourly
 !-----------------------------------------------------------------------
- real function fnrla(maxrla, TempCeil, TempOpt, TempMin, Temp)
-    real, intent(in) :: maxrla, TempCeil, TempOpt, TempMin
-    real Temp
-    Temp = min(max(TempMin,Temp), TempCeil)
-    fnrla = maxrla * ((TempCeil-Temp)/(TempCeil-TempOpt)) * (Temp/TempOpt)**(TempOpt/(TempCeil-TempOpt))
- end function fnrla    
- 
+real function fnrla(maxrla, TempCeil, TempOpt, TempMin, Temp)
+   real, intent(in) :: maxrla, TempCeil, TempOpt, TempMin
+   real Temp
+   Temp = min(max(TempMin, Temp), TempCeil)
+   fnrla = maxrla*((TempCeil - Temp)/(TempCeil - TempOpt))*(Temp/TempOpt)**(TempOpt/(TempCeil - TempOpt))
+end function fnrla
+
 !-----------------------------------------------------------------------
 ! Hourly calculation of the rate of leaf appearance (RLA)
 ! Same as fnrla but calculated RLA is divided by 24 (for 1 hour)
 !-----------------------------------------------------------------------
- real function fnrlaHourly(maxrla, TempCeil, TempOpt, TempMin, tHour)
-    real, intent(in) :: maxrla, TempCeil, TempOpt, TempMin, tHour
-    real fnrla
-    fnrlaHourly = fnrla(maxrla, TempCeil, TempOpt, TempMin, tHour)/24.0
- end function fnrlaHourly    
- 
- 
+real function fnrlaHourly(maxrla, TempCeil, TempOpt, TempMin, tHour)
+   real, intent(in) :: maxrla, TempCeil, TempOpt, TempMin, tHour
+   real fnrla
+   fnrlaHourly = fnrla(maxrla, TempCeil, TempOpt, TempMin, tHour)/24.0
+end function fnrlaHourly
+
 !-----------------------------------------------------------------------
 ! New function for computing the daily rate of leaf appearance based on
 ! hourly temperatures 05/29/2013
 !-----------------------------------------------------------------------
- real function fnrlaDaily(tMax, tMin, maxrla, TempCeil, TempOpt, TempMin)
-    real, intent(in) :: maxrla, TempCeil, TempOpt, TempMin
-    real fnrlaHourly, rlaHourly, tMin, tMax, th
-    real, parameter :: pi = 3.141592
-    integer :: i
-    
-    fnrlaDaily = 0.0
-    do i = 1, 24
-       th = (tMax+tMin)/2.0 + (tMax-tMin)/2.0 * sin((pi/12.0)*real(i))
-       !Estimate of hourly RLA, already divided by 24 and th already constrained between 0 and TCeiling
-       rlaHourly = fnrlaHourly(maxrla, TempCeil, TempOpt, TempMin, th)       
-       fnrlaDaily = fnrlaDaily + rlaHourly    
-    end do   
- end function fnrlaDaily
-   
+real function fnrlaDaily(tMax, tMin, maxrla, TempCeil, TempOpt, TempMin)
+   real, intent(in) :: maxrla, TempCeil, TempOpt, TempMin
+   real fnrlaHourly, rlaHourly, tMin, tMax, th
+   real, parameter :: pi = 3.141592
+   integer :: i
 
-!-----------------------------------------------------------------------      
+   fnrlaDaily = 0.0
+   do i = 1, 24
+      th = (tMax + tMin)/2.0 + (tMax - tMin)/2.0*sin((pi/12.0)*real(i))
+      !Estimate of hourly RLA, already divided by 24 and th already constrained between 0 and TCeiling
+      rlaHourly = fnrlaHourly(maxrla, TempCeil, TempOpt, TempMin, th)
+      fnrlaDaily = fnrlaDaily + rlaHourly
+   end do
+end function fnrlaDaily
+
+!-----------------------------------------------------------------------
 ! This function computes the daily thermal time corresponding to the maxT
 ! and minT inputs. Part of APSIM's thermal time accumulator.
 ! Steps:
 ! 1. Estimate eight 3-hourly temperatures based on minT and maxT
 ! 2. Estimate (interpolate) growing degree days corresponding to these
 !    temperatures
-! 3. Derive the daily thermal time as the average of the eight values of 
+! 3. Derive the daily thermal time as the average of the eight values of
 !    growing degree days
-!-----------------------------------------------------------------------      
+!-----------------------------------------------------------------------
 real function dailyttapsim(maxT, minT, xtemp, ygdd)
-     real, intent(in) :: maxT, minT, xtemp(5), ygdd(5)
-     integer maxPeriod, period
-     real gdd3Hr, gdd3HrCum, tMean3Hr, alin
-         
-     gdd3HrCum = 0.0
-     maxPeriod = 8
-     do period = 1, maxPeriod
-        tMean3Hr = tempthreehr(maxT, minT, real(period))                !Get a three-hour air temperature
-        gdd3HrCum = gdd3HrCum + alin(xtemp,ygdd,size(xtemp),tMean3Hr)   !Estimate corresponding value of thermal time
-     end do
-     dailyttapsim = gdd3HrCum/real(maxPeriod)
+   real, intent(in) :: maxT, minT, xtemp(5), ygdd(5)
+   integer maxPeriod, period
+   real gdd3Hr, gdd3HrCum, tMean3Hr, alin
+
+   gdd3HrCum = 0.0
+   maxPeriod = 8
+   do period = 1, maxPeriod
+      tMean3Hr = tempthreehr(maxT, minT, real(period))                !Get a three-hour air temperature
+      gdd3HrCum = gdd3HrCum + alin(xtemp, ygdd, size(xtemp), tMean3Hr)   !Estimate corresponding value of thermal time
+   end do
+   dailyttapsim = gdd3HrCum/real(maxPeriod)
 end function dailyttapsim
 
- 
-!-----------------------------------------------------------------------      
+!-----------------------------------------------------------------------
 ! This function estimates a three-hourly air temperature given daily maximum
-! and minimum air temperatures and a specific period. 
+! and minimum air temperatures and a specific period.
 ! Part of APSIM's daily thermal accumulator
-!-----------------------------------------------------------------------      
-real function tempthreehr(tMax, tMin, period) 
-     real, intent(in) :: tMax, tMin, period
-     real rangeFrac, diurnalRange, deviation
-     rangeFrac = 0.92105 + 0.1140*period - 0.0703*period**2 + 0.0053*period**3
-     diurnalRange = tMax - tMin
-     deviation = rangeFrac * diurnalRange   
-     tempthreehr = tMin + deviation
-end function tempthreehr   
+!-----------------------------------------------------------------------
+real function tempthreehr(tMax, tMin, period)
+   real, intent(in) :: tMax, tMin, period
+   real rangeFrac, diurnalRange, deviation
+   rangeFrac = 0.92105 + 0.1140*period - 0.0703*period**2 + 0.0053*period**3
+   diurnalRange = tMax - tMin
+   deviation = rangeFrac*diurnalRange
+   tempthreehr = tMin + deviation
+end function tempthreehr
 
-!-----------------------------------------------------------------------      
+!-----------------------------------------------------------------------
 ! Function to compute CERES-Maize's daily thermal time (GDD8)
-! Taken from MZ_Phenol 
+! Taken from MZ_Phenol
 ! tdsoil   Weighted average soil temperature, C
 ! tempcn = Crown temperature when snow is present and tmin < 0
 ! tempcx = Crown temp. for max. development rate, C
 ! tempcr = Crown temperature, C
 ! snow   = Snow depth, mm
 ! xs     = Temporary snow depth variable, mm
-!-----------------------------------------------------------------------      
+!-----------------------------------------------------------------------
 real function getgddcer(tMax, tMin, tOpt, rOpt, tBase, tlu, anthes, snow, srad, dayl)
-     real, intent(in) :: tMax, tMin, tOpt, rOpt, tBase, tlu, anthes, snow, srad, dayl
-     real th, dtt, xs, tempcn, tempcx, dopt, acoef, tdsoil, tmsoil, tnsoil 
-     integer i
-     
-     ! Compute Crown Temperature under snow pack
-     tempcn = tMin
-     tempcx = tMax
-     xs     = snow
-     xs     = amin1(xs, 15.0)
-     
-     ! Calculate crown temperature based on temperature and snow cover. 
-     ! Crown temperature is higher than tavg due to energy balance of snow pack.
-     if(tMin < 0.0) then
-        tempcn = 2.0 + tMin*(0.4+0.0018*(xs-15.0)**2)
-     end if
-     
-     if(tMax < 0.0) then
-        tempcx = 2.0 + tMax*(0.4+0.0018*(xs-15.0)**2)
-     end if
-     
-     tempcr = (tempcx + tempcn)/2.0
-  
-     ! Compute thermal time based on new method developed by J.T.R at CYMMIT, 5/5/98.  
-     ! DOPT, Devlopment optimum temperature, is set to TOPT during vegetative growth and to ROPT after anthesis
-     dopt = tOpt
-     if(tlu >= anthes) then
-         dopt = rOpt
-     end if
+   real, intent(in) :: tMax, tMin, tOpt, rOpt, tBase, tlu, anthes, snow, srad, dayl
+   real th, dtt, xs, tempcn, tempcx, dopt, acoef, tdsoil, tmsoil, tnsoil
+   integer i
 
-     ! Check basic temperature ranges and calculate DTT for development based on PC with JTR
-     if(tMax < tBase) then
-        dtt = 0.0
-     else if(tMin > dopt) then
-         
-        !This statement replaces DTT = TOPT .. GoL and LAH, CIMMYT, 1999
-        dtt = dopt - tBase
-          
-     !Now, modify TEMPCN, TEMPCX based on soil conditions or snow if corn and sorghum are before 10 leaves
-     else if(tlu <= 10.0) then  
-        !Check for snow  (should following be GT.0 or GT.15 ?).  
-        !Based on snow cover, calculate DTT for the day
-        if(xs > 0.0) then
-           !Snow on the ground
-           dtt = (tempcn + tempcx)/2.0 - tBase
-        else
-           !No snow, compute soil temperature
-           acoef = 0.01061 * srad + 0.5902
-           tdsoil = acoef * tMax + (1.0 - acoef) * tMin
-           tnsoil = 0.36354 * tMax + 0.63646 * tMin
-           if(tdsoil < tBase) then
-              dtt = 0.0
-           else
-              if(tnsoil < tBase) tnsoil = tBase
-              if(tdsoil > dopt)  tdsoil = dopt
-              tmsoil = tdsoil * (dayl/24.) + tnsoil * ((24.-dayl)/24.)
-              if(tmsoil < tBase) then
-                 dtt = (tBase+tdsoil)/2.0 - tBase
-              else
-                 dtt = (tnsoil+tdsoil)/2.0 - tBase
-              end if
-              !Statement added ... GoL and LAH, CIMMYT, 1999
-              dtt = amin1(dtt, dopt-tBase)
-           end if   !tdsoil < tBase
-        end if   !xs > 0.
-          
-     !Now, compute DTT for when Tmax or Tmin out of range
-     else if(tMin < tBase .OR. tMax > dopt) then
-        dtt = 0.0
-        do i = 1, 24
-           th = (tMax+tMin)/2. + (tMax-tMin)/2. * sin(3.14/12.*i)
-           if(th < tBase) th = tBase
-           if(th > dopt)  th = dopt
-           dtt = dtt + (th-tBase)/24.0
-        end do
-     else
-        dtt = (tmax+tMin)/2.0 - tBase
-     end if
-     
-     getgddcer = amax1(dtt, 0.0)
+   ! Compute Crown Temperature under snow pack
+   tempcn = tMin
+   tempcx = tMax
+   xs = snow
+   xs = amin1(xs, 15.0)
 
-end function getgddcer    
+   ! Calculate crown temperature based on temperature and snow cover.
+   ! Crown temperature is higher than tavg due to energy balance of snow pack.
+   if (tMin < 0.0) then
+      tempcn = 2.0 + tMin*(0.4 + 0.0018*(xs - 15.0)**2)
+   end if
 
-!-----------------------------------------------------------------------      
+   if (tMax < 0.0) then
+      tempcx = 2.0 + tMax*(0.4 + 0.0018*(xs - 15.0)**2)
+   end if
+
+   tempcr = (tempcx + tempcn)/2.0
+
+   ! Compute thermal time based on new method developed by J.T.R at CYMMIT, 5/5/98.
+   ! DOPT, Devlopment optimum temperature, is set to TOPT during vegetative growth and to ROPT after anthesis
+   dopt = tOpt
+   if (tlu >= anthes) then
+      dopt = rOpt
+   end if
+
+   ! Check basic temperature ranges and calculate DTT for development based on PC with JTR
+   if (tMax < tBase) then
+      dtt = 0.0
+   else if (tMin > dopt) then
+
+      !This statement replaces DTT = TOPT .. GoL and LAH, CIMMYT, 1999
+      dtt = dopt - tBase
+
+      !Now, modify TEMPCN, TEMPCX based on soil conditions or snow if corn and sorghum are before 10 leaves
+   else if (tlu <= 10.0) then
+      !Check for snow  (should following be GT.0 or GT.15 ?).
+      !Based on snow cover, calculate DTT for the day
+      if (xs > 0.0) then
+         !Snow on the ground
+         dtt = (tempcn + tempcx)/2.0 - tBase
+      else
+         !No snow, compute soil temperature
+         acoef = 0.01061*srad + 0.5902
+         tdsoil = acoef*tMax + (1.0 - acoef)*tMin
+         tnsoil = 0.36354*tMax + 0.63646*tMin
+         if (tdsoil < tBase) then
+            dtt = 0.0
+         else
+            if (tnsoil < tBase) tnsoil = tBase
+            if (tdsoil > dopt) tdsoil = dopt
+            tmsoil = tdsoil*(dayl/24.) + tnsoil*((24.-dayl)/24.)
+            if (tmsoil < tBase) then
+               dtt = (tBase + tdsoil)/2.0 - tBase
+            else
+               dtt = (tnsoil + tdsoil)/2.0 - tBase
+            end if
+            !Statement added ... GoL and LAH, CIMMYT, 1999
+            dtt = amin1(dtt, dopt - tBase)
+         end if   !tdsoil < tBase
+      end if   !xs > 0.
+
+      !Now, compute DTT for when Tmax or Tmin out of range
+   else if (tMin < tBase .OR. tMax > dopt) then
+      dtt = 0.0
+      do i = 1, 24
+         th = (tMax + tMin)/2.+(tMax - tMin)/2.*sin(3.14/12.*i)
+         if (th < tBase) th = tBase
+         if (th > dopt) th = dopt
+         dtt = dtt + (th - tBase)/24.0
+      end do
+   else
+      dtt = (tmax + tMin)/2.0 - tBase
+   end if
+
+   getgddcer = amax1(dtt, 0.0)
+
+end function getgddcer
+
+!-----------------------------------------------------------------------
 ! Function to compute GDD[30,10]
-!-----------------------------------------------------------------------      
+!-----------------------------------------------------------------------
 real function getgddten(tMax, tMin, tOpt, tBase)
-     real, intent(in) :: tMax, tMin, tOpt, tBase 
-     real gddMax, gddMin
-     if(tMax < tBase) then
-        gddMax = tBase
-     else
-        gddMax = min(tOpt, tMax)
-     end if
- 
-     if(tMin > tOpt) then
-        gddMin = tOpt
-     else
-        gddMin = max(tBase, tMin) 
-     end if       
- 
-     getgddten = (gddMax + gddMin)/2 - tBase
-end function getgddten    
+   real, intent(in) :: tMax, tMin, tOpt, tBase
+   real gddMax, gddMin
+   if (tMax < tBase) then
+      gddMax = tBase
+   else
+      gddMax = min(tOpt, tMax)
+   end if
 
-!-----------------------------------------------------------------------      
+   if (tMin > tOpt) then
+      gddMin = tOpt
+   else
+      gddMin = max(tBase, tMin)
+   end if
+
+   getgddten = (gddMax + gddMin)/2 - tBase
+end function getgddten
+
+!-----------------------------------------------------------------------
 ! Function to compute GTI (General Thermal Index)
 ! The GTI function was developed using temperature values < 25oC.
 ! Extrapolation beyond 25oC was uncertain. Here, we assume that the
 ! GTI/RLA ratio of 28.5 (at 25oC) is preserved when temperatures > 25oC.
-!-----------------------------------------------------------------------      
+!-----------------------------------------------------------------------
 real function getgti(tmpa, tlu, anthes, rlatmpa)
-     real, intent(in) :: tmpa, tlu, anthes, rlatmpa
-       
-     if(tlu <= anthes) then
-        !getgti = 0.043177*tmpa**2 - 0.000894*tmpa**3
-        getgti = 0.0
-     else
-        if(tmpa <= 25.) then
-           getgti = 5.3581 + 0.011178*tmpa**2
-        else
-           getgti = 28.5 * rlatmpa
-        end if
-     end if
-    
-end function getgti    
+   real, intent(in) :: tmpa, tlu, anthes, rlatmpa
+
+   if (tlu <= anthes) then
+      !getgti = 0.043177*tmpa**2 - 0.000894*tmpa**3
+      getgti = 0.0
+   else
+      if (tmpa <= 25.) then
+         getgti = 5.3581 + 0.011178*tmpa**2
+      else
+         getgti = 28.5*rlatmpa
+      end if
+   end if
+
+end function getgti
 
 !-----------------------------------------------------------------------
 ! Comparison of growth stages in MAIS and CERES
 ! growthStage Definitions (MAIS growth stages)    ISTAGEG (CERES)
 !                                            7 - Sowing date
-!   1 - Germination-9                        8 - Germination                                                 
+!   1 - Germination-9                        8 - Germination
 !   2 - Emergence-1                          9 - Emergence
 !   3 - End of juvenile phase-2              1 - End juvenile
 !   4 - Tassel initiation-3                  2 - Pannicle initiation
@@ -726,9 +721,9 @@ end function getgti
 !-----------------------------------------------------------------------
 
 !==============================================================================================================================
-! Variable definitions                                                                                  Unit 
+! Variable definitions                                                                                  Unit
 !------------------------------------------------------------------------------------------------------------------------------
-! anthes     Leaf stage at anthesis                                                                     tlu   
+! anthes     Leaf stage at anthesis                                                                     tlu
 ! asi        Anthesis to silking interval                                                               tlu
 ! pgrasi     Average plant growth rate during growth stages 5 and 6                                     g/plant/day
 ! blackl     Physiological maturity or black layer                                                      dvs
@@ -748,19 +743,19 @@ end function getgti
 ! doytnleaf  Year-day of year during the tassel initiation phase (growth stage = 4) and used as
 !            the date on which the topmost leaf appeared                                                yyyyddd
 ! dtt        Daily thermal time (for current day)                                                       degree-day
-! dvs        Development stage (0 is planting, 1 is silking, and 2 is maturity) 
+! dvs        Development stage (0 is planting, 1 is silking, and 2 is maturity)
 ! dvsrate    Rate of development stage
 ! dvs_silk   Value of DVS at silking
 ! dynamic    Modular control (runinit=1 for run initialization, seasinit=2 for seasonal initialization,
 !            rate=3 for rate calculations, integr=4 for integration of state variables, output=5 for
-!            writing daily outputs, seasend=6 for closing output files                                 
+!            writing daily outputs, seasend=6 for closing output files
 ! fnleafap   [Function] Computes the daily rate of leaf appearance (old method)
 ! fnrla      [Function] Computes the rate of leaf appearance based on hourly or daily temperatures
 ! fnrlaDaily       [Function] Calculates the daily rate of leaf appearance based on hourly RLA values
 ! fnrlaHourly      [Function] Calculates the hourly rate of leaf appearance
 ! gddae      Cumulative daily thermal time after emergence (CERES method)                               degree-day
 ! gddapsim   Cumulative daily thermal time after planting using APSIM's approach                        degree-day
-! gddcer     Cumulative daily thermal time after planting (CERES method)                                degree-day                                                            
+! gddcer     Cumulative daily thermal time after planting (CERES method)                                degree-day
 ! gddten     Cumulative daily thermal time after planting using GDD[10,30]                              degree-day
 ! getgddcer        [Function] Computes daily thermal time using CERES-Maize's method
 ! getgddten        [Function] Computes daily thermal time using GDD[10,30] method
@@ -779,13 +774,13 @@ end function getgti
 ! iswwat     Water balance simulation switch (Y/N)
 ! L          Loop counter
 ! L0         Temporary soil layer number
-! lfnc          Node position of largest leaf 
+! lfnc          Node position of largest leaf
 ! lftop         Number of leaves (or leaf nodes) above the largest (and most longevous) leaf            leaves
 ! ll(nl)     Volumetric soil water lower limit                                                          cm3/cm3
 ! mdate      Maturity date                                                                              yyyyddd
 ! meant      Mean air temperature during photoperiod- and temperature-sensitive period                  degree C
 ! milk       Half milk line                                                                             dvs
-! mrad       Mean of daily incident solar radiation during the last week                                MJ/m2/day 
+! mrad       Mean of daily incident solar radiation during the last week                                MJ/m2/day
 ! mulch      Constructed type for variables describing mulch properties
 ! nlayr      Number of soil layers
 ! olg        Onset linear dry matter accumulation of grain                                              dvs
@@ -798,10 +793,10 @@ end function getgti
 ! rlaf       Effect of solar radiation (low levels) on the rate of leaf appearance
 ! rlamax     Maximum rate of leaf appearance                                                            leaves/day
 ! rlan       Night-time rate of leaf tip appearance (based on TMIN)                                     tlu/day
-! gfpyr      Change in duration of grain filling period due to the year of commercial release 
+! gfpyr      Change in duration of grain filling period due to the year of commercial release
 !            of the hybrid                                                                              gti
 ! sdepth     Sowing depth                                                                               cm
-! silk       Leaf stage at silking                                                                      tlu 
+! silk       Leaf stage at silking                                                                      tlu
 ! snow       Snow depth                                                                                 mm
 ! SoilProp   Constructed type for variables related to soil properties
 ! srad       Incident solar radiation                                                                   MJ/m2/day
@@ -809,7 +804,7 @@ end function getgti
 ! st(l)      Soil temperature of layer l                                                                degree C
 ! stLayer1   Soil temperature of layer 1                                                                degree C
 ! sumr       Accumulated solar radiation during past 7 days                                             MJ/m2
-! sw(l)      Volumetric soil water content in layer l                                                   cm3/cm3 
+! sw(l)      Volumetric soil water content in layer l                                                   cm3/cm3
 ! swsd       Modified soil water content for computing emergence (KD: or germination?)                  cm3/cm3
 ! swcg       Minimum soil water available required for germination to occur                             cm3/cm3
 ! taint      Interval between time of emergence of topmost leaf and anthesis                            tlu
@@ -818,16 +813,16 @@ end function getgti
 ! TCeiling   Ceiling temperature for computing the rate of leaf appearance                              degree C
 ! tempthreehr  [Function] Estimates three-hour air temperatures based on daily max and min
 ! th         Hourly temperature                                                                         degree C
-! timdif     [Function] For computing difference between two dates                                      returns number of days 
+! timdif     [Function] For computing difference between two dates                                      returns number of days
 ! tlu        Thermal leaf unit (cumulative rate of leaf tip appearance)                                 tlu
 ! tmax       Maximum daily temperature                                                                  degree C
 ! tmin       Minimum daily temperature                                                                  degree C
 ! TminRla
 ! tmpa       Daily mean air temperature                                                                 degree C
 ! tnleaf     Total number of initiated leaves                                                           leaves
-! tnleafrm   Leaf number (at dayl=16h and temp=20C) as a function of relative maturity                  leaves                                      
-! tnleafphot Change in leaf number due to photoperiod                                                   leaves 
-! tnleaftemp Change in leaf number due to temperature                                                   leaves                                                                                 
+! tnleafrm   Leaf number (at dayl=16h and temp=20C) as a function of relative maturity                  leaves
+! tnleafphot Change in leaf number due to photoperiod                                                   leaves
+! tnleaftemp Change in leaf number due to temperature                                                   leaves
 ! topt       Optimum temperature for daily thermal time calculation                                     degree C
 ! TOptRla    Optimum temperature for computing the rate of leaf appearance                              degree C
 ! tothirty   Optimum temperature for computing gdd[30,10]                                               degree C
@@ -837,7 +832,7 @@ end function getgti
 ! xtemp      Vector of temperatures used for interpolation thermal time for the APSIM thermal time
 !            accumulator                                                                                degree C
 ! year       Four-digit year                                                                            yyyy
-! ygdd       Vector of growing degree days used for interpolation thermal time for the APSIM 
+! ygdd       Vector of growing degree days used for interpolation thermal time for the APSIM
 !            thermal time accumulator                                                                   degree-day
 ! yrdoy      Year day-of-year                                                                           yyyyddd
 ! yremrg

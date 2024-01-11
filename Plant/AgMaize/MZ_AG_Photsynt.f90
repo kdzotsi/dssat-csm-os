@@ -1,6 +1,6 @@
 !=======================================================================
 !  MZ_AG_Photsynt
-!  Computes canopy daily gross photosynthesis (g biomass/m2 d) by 
+!  Computes canopy daily gross photosynthesis (g biomass/m2 d) by
 !  integrating each leaf contribution over hourly time steps in the day.
 !  Adapted from ETPHOT by N.B. Pickering
 !-----------------------------------------------------------------------
@@ -22,255 +22,252 @@
 ! -Start photosynthesis at emergence? pgross getting negative before emergence
 ! -Error message for rowsp or pltpop = 0.0
 !=======================================================================
-subroutine MZ_AG_Photsynt(control, soilprop, weather, sw,    &
-           gddae, dvs,                                       &   !From Phenology
-           lfn, greenla, lflon, lamaxpot, lapot,             &   !From Leaf area
-           pgross, srad, parday, parsunday, parshday, radtotday) !Outputs                                             
+subroutine MZ_AG_Photsynt(control, soilprop, weather, sw, &
+                          gddae, dvs, &   !From Phenology
+                          lfn, greenla, lflon, lamaxpot, lapot, &   !From Leaf area
+                          pgross, srad, parday, parsunday, parshday, radtotday) !Outputs
 
-use ModuleDefs
-use MZ_AG_ModuleDefs
-implicit none
-save
+   use ModuleDefs
+   use MZ_AG_ModuleDefs
+   implicit none
+   save
 
 !----------------------------------------------------------------------
 ! Define variables
 !----------------------------------------------------------------------
-integer, parameter :: lenla = 50
-real, parameter :: cans  = 4.5
-real, parameter :: scvp  = 0.2
-real, parameter :: tincr = 24.0/ts
-real, parameter :: insp  = 4.514
-real, parameter :: as    = 288.615
-real, parameter :: cvx   = -75.774
-real, parameter :: pang  = 64.0
-real, parameter :: cm2tom2 = 1.0E-4
-integer, intent(in) :: lfn
-real, intent(in)  :: sw(nl), gddae, dvs
-real, intent(in), dimension(lenla)  :: lflon, lamaxpot    
-real, intent(out) :: pgross
-                        
-! Constructed variables based on definitions in ModuleDefs.for   
-type(ControlType), intent(in) :: control
-type(WeatherType), intent(in) :: weather
-type(SoilType),    intent(in) :: soilprop                    
-type(FileioType)  :: datafileio
-type(SpeciesType) :: dataspecies
+   integer, parameter :: lenla = 50
+   real, parameter :: cans = 4.5
+   real, parameter :: scvp = 0.2
+   real, parameter :: tincr = 24.0/ts
+   real, parameter :: insp = 4.514
+   real, parameter :: as = 288.615
+   real, parameter :: cvx = -75.774
+   real, parameter :: pang = 64.0
+   real, parameter :: cm2tom2 = 1.0E-4
+   integer, intent(in) :: lfn
+   real, intent(in)  :: sw(nl), gddae, dvs
+   real, intent(in), dimension(lenla)  :: lflon, lamaxpot
+   real, intent(out) :: pgross
 
-! Variables from constructed types 
-integer :: dynamic, yrdoy
-real, dimension(ts) :: amtrh, tairhr, azzon, beta, frdifp, parhr
-real :: salb, dul(nl), snup, sndn, azir, pltpop, rowspcm, rowspmeter, sgfun, gasfn, tmin
-real :: asmax, canh, xc    !Photosynthesis parameters from species file
+! Constructed variables based on definitions in ModuleDefs.for
+   type(ControlType), intent(in) :: control
+   type(WeatherType), intent(in) :: weather
+   type(SoilType), intent(in) :: soilprop
+   type(FileioType)  :: datafileio
+   type(SpeciesType) :: dataspecies
+
+! Variables from constructed types
+   integer :: dynamic, yrdoy
+   real, dimension(ts) :: amtrh, tairhr, azzon, beta, frdifp, parhr
+   real :: salb, dul(nl), snup, sndn, azir, pltpop, rowspcm, rowspmeter, sgfun, gasfn, tmin
+   real :: asmax, canh, xc    !Photosynthesis parameters from species file
 
 ! KAD 09/24/2013 - For checking radiation subroutine
-real,dimension(ts) :: parsunHour, parshHour, radtotHour
-real :: srad, parday, parsunday, parshday, radtotday
+   real, dimension(ts) :: parsunHour, parshHour, radtotHour
+   real :: srad, parday, parsunday, parshday, radtotday
 
 ! Other variables
-character(len=12) :: files
-character(len=80) :: pathsr
-integer :: i, h, leafnum(lenla)
-logical :: light, daytim
-real :: lfln, lflp, canw, canwh, hs, turfac, mult, amplt, froll, palb, palbd
-real :: pg, pghr, betn, canht, hlai, pgday, radtot
-real,dimension(lenla) :: plaisl, plaish, parsh, parsun, lapot, greenla
-real,dimension(lenla) :: arefhr, adifhr, addrhr, addfhr
+   character(len=12) :: files
+   character(len=80) :: pathsr
+   integer :: i, h, leafnum(lenla)
+   logical :: light, daytim
+   real :: lfln, lflp, canw, canwh, hs, turfac, mult, amplt, froll, palb, palbd
+   real :: pg, pghr, betn, canht, hlai, pgday, radtot
+   real, dimension(lenla) :: plaisl, plaish, parsh, parsun, lapot, greenla
+   real, dimension(lenla) :: arefhr, adifhr, addrhr, addfhr
 
 ! Transfer values from constructed data types into local variables
-dynamic = control  % dynamic
-yrdoy   = control  % yrdoy
-azzon   = weather  % azzon
-beta    = weather  % beta
-amtrh   = weather  % amtrh
-tairhr  = weather  % tairhr
-sndn    = weather  % sndn
-snup    = weather  % snup
-frdifp  = weather  % frdifp
-parhr   = weather  % parhr   
-tmin    = weather  % tmin  
-salb    = soilprop % salb 
-dul     = soilprop % dul   
+   dynamic = control%dynamic
+   yrdoy = control%yrdoy
+   azzon = weather%azzon
+   beta = weather%beta
+   amtrh = weather%amtrh
+   tairhr = weather%tairhr
+   sndn = weather%sndn
+   snup = weather%snup
+   frdifp = weather%frdifp
+   parhr = weather%parhr
+   tmin = weather%tmin
+   salb = soilprop%salb
+   dul = soilprop%dul
 
 !----------------------------------------------------------------------
 ! Dynamic = runinit or dynamic = seasinit
 !---------------------------------------------------------------------
-if(dynamic==runinit .or. dynamic==seasinit) then
+   if (dynamic == runinit .or. dynamic == seasinit) then
 !open(unit=9000, file="PHOTAGMAIZE.OUT")
 !Initialize variables
-light  = .true.
-pghr   = 0.0
-betn   = 0.0
-canht  = 0.0
-hlai   = 0.0
-lfln   = 0.0
-lflp   = 0.0
-canw   = 0.0
-canwh  = 0.0
-daytim = .false.
-hs     = 0.0
-turfac = 1.0
-mult   = 0.0
-amplt  = 0.0
-froll  = 0.0
-palb   = 0.0
-palbd  = 0.0
-pg     = 0.0
-pgross = 0.0
-srad   = 0.
-parday = 0.
-parsunday = 0.
-parshday  = 0.
-radtotday = 0.
+      light = .true.
+      pghr = 0.0
+      betn = 0.0
+      canht = 0.0
+      hlai = 0.0
+      lfln = 0.0
+      lflp = 0.0
+      canw = 0.0
+      canwh = 0.0
+      daytim = .false.
+      hs = 0.0
+      turfac = 1.0
+      mult = 0.0
+      amplt = 0.0
+      froll = 0.0
+      palb = 0.0
+      palbd = 0.0
+      pg = 0.0
+      pgross = 0.0
+      srad = 0.
+      parday = 0.
+      parsunday = 0.
+      parshday = 0.
+      radtotday = 0.
 
 !Read all sections of fileio and transfer variables
-call readfileio(control, 'ALLSEC', datafileio)
-files      = datafileio % files
-pathsr     = datafileio % pathsr
-sgfun      = datafileio % sgfun
-gasfn      = datafileio % gasfn
-pltpop     = datafileio % pltpop 
-rowspcm    = datafileio % rowspc
-rowspmeter = rowspcm / 100.0
-azir       = datafileio % azir
+      call readfileio(control, 'ALLSEC', datafileio)
+      files = datafileio%files
+      pathsr = datafileio%pathsr
+      sgfun = datafileio%sgfun
+      gasfn = datafileio%gasfn
+      pltpop = datafileio%pltpop
+      rowspcm = datafileio%rowspc
+      rowspmeter = rowspcm/100.0
+      azir = datafileio%azir
 
 !Read photosynthesis parameters from species file and transfer variables
-call readspecies(files, pathsr, '*PHOTO', dataspecies)
-asmax = dataspecies % asmax
-xc    = dataspecies % xc 
-canh  = dataspecies % canh
+      call readspecies(files, pathsr, '*PHOTO', dataspecies)
+      asmax = dataspecies%asmax
+      xc = dataspecies%xc
+      canh = dataspecies%canh
 
 !CHP 2/23/2009 added array index for tairhr -- I know this is wrong, but
 !what does it need to be?  Call subroutine in a loop from 1 to 24?
-call MZ_AG_Iphotsynt(dynamic, tmin, asmax, gddae, greenla, plaisl, plaish,         & !Input
-     lapot, lflon, lfn, light, parsh, parsun, tairhr(1), lamaxpot, sgfun, gasfn,   & !Input
-     pghr)                                                                           !Output
-                                                                 
-!----------------------------------------------------------------------
-! Dynamic = rate 
-!----------------------------------------------------------------------
-else if(dynamic == rate) then  
-
+      call MZ_AG_Iphotsynt(dynamic, tmin, asmax, gddae, greenla, plaisl, plaish, & !Input
+                           lapot, lflon, lfn, light, parsh, parsun, tairhr(1), lamaxpot, sgfun, gasfn, & !Input
+                           pghr)                                                                           !Output
 
 !----------------------------------------------------------------------
-! Dynamic = integrate 
+! Dynamic = rate
 !----------------------------------------------------------------------
-else if(dynamic == integr) then
+   else if (dynamic == rate) then
+
+!----------------------------------------------------------------------
+! Dynamic = integrate
+!----------------------------------------------------------------------
+   else if (dynamic == integr) then
 
 ! Calculate between plant spacing (m)
-if(rowspmeter > 0.0 .and. pltpop > 0.0) then
-   betn = 1.0 / (rowspmeter*pltpop)
-else
-   betn = 0.0
-end if
+      if (rowspmeter > 0.0 .and. pltpop > 0.0) then
+         betn = 1.0/(rowspmeter*pltpop)
+      else
+         betn = 0.0
+      end if
 
 !Calculate canopy growth and update LAI using updated green leaf area
-if(dvs <= 1.0) then
-   canht = 1.85*canh/(1+EXP(-cans*(dvs-0.95)))
-end if
+      if (dvs <= 1.0) then
+         canht = 1.85*canh/(1 + EXP(-cans*(dvs - 0.95)))
+      end if
 
-hlai = 0.0
-do i = 1, lfn
-   if(greenla(i) < 0.0) greenla(i) = 0.0
-   hlai = hlai + cm2tom2*greenla(i)*pltpop    
-   if(lapot(i) >= 0.8*lamaxpot(i)) then
-     lfln = (((insp*greenla(i)+as) - ((insp*greenla(i)+as)**2.0 - (4.0*insp*greenla(i)*as*cvx))**0.5)/(2.0*cvx))
-     lflp = lfln * cos(pang*rad)
-     canw = lflp * 2.0/100.0
-     canwh = min(max(canwh,canw),rowspmeter)
-   end if
-end do
-if(canht > 0.0  .and. canht < 0.01) canht = 0.01
-if(canht > 0.01 .and. canwh < 0.01) canwh = 0.01
+      hlai = 0.0
+      do i = 1, lfn
+         if (greenla(i) < 0.0) greenla(i) = 0.0
+         hlai = hlai + cm2tom2*greenla(i)*pltpop
+         if (lapot(i) >= 0.8*lamaxpot(i)) then
+            lfln = (((insp*greenla(i) + as) - ((insp*greenla(i) + as)**2.0 - (4.0*insp*greenla(i)*as*cvx))**0.5)/(2.0*cvx))
+            lflp = lfln*cos(pang*rad)
+            canw = lflp*2.0/100.0
+            canwh = min(max(canwh, canw), rowspmeter)
+         end if
+      end do
+      if (canht > 0.0 .and. canht < 0.01) canht = 0.01
+      if (canht > 0.01 .and. canwh < 0.01) canwh = 0.01
 
 ! Calculate plant albedo to PAR as a function of surface SW
-palb = 0.6 * salb
-if(sw(1) < dul(1)) then
-   palbd = palb * 1.25
-   palb = palbd - (palbd-palb)/dul(1) * sw(1)
-end if
+      palb = 0.6*salb
+      if (sw(1) < dul(1)) then
+         palbd = palb*1.25
+         palb = palbd - (palbd - palb)/dul(1)*sw(1)
+      end if
 
 !***Begin hourly loop
-pgday = 0.0
-light = .true.
+      pgday = 0.0
+      light = .true.
 
 !open(unit=9000, file="RADABS.OUT")
 !write(9000,'(9(1X,A6))') 'YRDOY', 'HOUR', 'LEAFNO', 'LAISL', 'LAISH', 'ADIF', 'ADDR', 'ADDF', 'AREF'
-do h = 1, ts
-   !Calculate effect of leaf rolling
-   !mult  = 5.0 - 4.0*turfac
-   !amplt = (25.0+(100.0-25.0)*exp(-3.5*(1.0-amtrh(h))))*mult
-   !froll = amin1(turfac+(real(h)-14.0)**2.0/amplt,1.0)
-   froll = 1.0	
-	    
-   !Calculate real and solar time
-   hs = real(h) * tincr
-   if(hs > snup .and. hs < sndn) then
-      daytim = .true.
-   else
-      daytim = .false.
-   end if
+      do h = 1, ts
+         !Calculate effect of leaf rolling
+         !mult  = 5.0 - 4.0*turfac
+         !amplt = (25.0+(100.0-25.0)*exp(-3.5*(1.0-amtrh(h))))*mult
+         !froll = amin1(turfac+(real(h)-14.0)**2.0/amplt,1.0)
+         froll = 1.0
 
-   !Calculate hourly radiation absorption by canopy/soil
-   call MZ_AG_Radabs(azir, azzon(h), beta(h), betn, canht, canwh, daytim, frdifp(h),     &  !Input
-        froll, greenla, h, lfn, palb, parhr(h), pltpop, rowspmeter, scvp, hlai, xc,      &  !Input
-        parsh, parsun, plaish, plaisl, radtot, arefhr, adifhr, addrhr, addfhr, leafnum)     !Output
-   
+         !Calculate real and solar time
+         hs = real(h)*tincr
+         if (hs > snup .and. hs < sndn) then
+            daytim = .true.
+         else
+            daytim = .false.
+         end if
+
+         !Calculate hourly radiation absorption by canopy/soil
+         call MZ_AG_Radabs(azir, azzon(h), beta(h), betn, canht, canwh, daytim, frdifp(h), &  !Input
+                           froll, greenla, h, lfn, palb, parhr(h), pltpop, rowspmeter, scvp, hlai, xc, &  !Input
+                           parsh, parsun, plaish, plaisl, radtot, arefhr, adifhr, addrhr, addfhr, leafnum)     !Output
+
 !   !write(9000, '(i7,1x,2(1x,i2),4(1x,f5.0))') (yrdoy, h, leafnum(i), adifhr(i), addrhr(i), addfhr(i), arefhr(i), i=1,25)
 !   (write(9000, '(i7,1x,2(1x,i2),4(1x,f5.0))') yrdoy, h, leafnum(i), adifhr(i), addrhr(i), addfhr(i), arefhr(i), i=22,1,-1)
 !   do i = 22,1,-1
 !      write(9000, '(i7,2(1x,i6),2(1x,f6.3),4(1x,f6.1))') yrdoy, h, leafnum(i), plaisl(i), plaish(i), adifhr(i), addrhr(i), addfhr(i), arefhr(i)
 !   end do
-        
-   !KAD - Save absorbed radiation values for each hour
-   parsunHour(h) = sum(parsun*plaisl)*3600.
-   parshHour(h) = sum(parsh*plaish)*3600.
-   radtotHour(h) = radtot*3600.
-   
-   !Calculate instantaneous gross assimilation
-   call MZ_AG_Iphotsynt(dynamic, tmin, asmax, gddae, greenla, plaisl, plaish,         & !Input
-        lapot, lflon, lfn, light, parsh, parsun, tairhr(h), lamaxpot, sgfun, gasfn,   & !Input
-        pghr)                                                                           !Output
-     
-   !Integrate instantaneous canopy photoynthesis (�mol[CO2]/m2/s) to get daily values (g[CO2]/m2/day)
-   !1 mol[CO2] = 44 g[CO2] so 1umol[CO2] = 44.10-6g[CO2] and 1umol[CO2]/s = 44.10-6 x 3600 g[CO2]/hr
-   pgday = pgday + tincr*pghr*44.0*0.0036
-end do
+
+         !KAD - Save absorbed radiation values for each hour
+         parsunHour(h) = sum(parsun*plaisl)*3600.
+         parshHour(h) = sum(parsh*plaish)*3600.
+         radtotHour(h) = radtot*3600.
+
+         !Calculate instantaneous gross assimilation
+         call MZ_AG_Iphotsynt(dynamic, tmin, asmax, gddae, greenla, plaisl, plaish, & !Input
+                              lapot, lflon, lfn, light, parsh, parsun, tairhr(h), lamaxpot, sgfun, gasfn, & !Input
+                              pghr)                                                                           !Output
+
+         !Integrate instantaneous canopy photoynthesis (�mol[CO2]/m2/s) to get daily values (g[CO2]/m2/day)
+         !1 mol[CO2] = 44 g[CO2] so 1umol[CO2] = 44.10-6g[CO2] and 1umol[CO2]/s = 44.10-6 x 3600 g[CO2]/hr
+         pgday = pgday + tincr*pghr*44.0*0.0036
+      end do
 !close(9000)
 !***End hourly loop
 
 ! Daily gross photosynthesis (CH2O): g[CH2O]/m2/day
-!This is actually glucose produced: 6 moles[CO2] (44 g/mole) would produce 1 mole[glucose] (180 g/mole) 
+!This is actually glucose produced: 6 moles[CO2] (44 g/mole) would produce 1 mole[glucose] (180 g/mole)
 !also equivalent to 6 moles[CH2O] (30 g/mole)
-pg = pgday*30.0/44.0
-pgross = pg*10.0           !Convert pg to kg[CH2O]/ha/day same as kg[glucose]/ha/day
+      pg = pgday*30.0/44.0
+      pgross = pg*10.0           !Convert pg to kg[CH2O]/ha/day same as kg[glucose]/ha/day
 
 ! write(9000,'(f6.2,1x,4(1x,f6.1),1x,i6,1x,f6.2,1x,f6.0,2(1x,f6.1))')  &
-!     hlai,gddae,sum(greenla),lapot(10),lflon(10),lfn,dvs,lamaxpot(10),pgross  
+!     hlai,gddae,sum(greenla),lapot(10),lflon(10),lfn,dvs,lamaxpot(10),pgross
 
 ! KAD 09/24/2013. Incoming and absorbed radiation
-srad = weather % srad
-parday = sum(parhr*3600.)*1E-6/4.6
-parsunday = sum(parsunHour)*1E-6/4.6
-parshday = sum(parshHour)*1E-6/4.6
-radtotday = sum(radtotHour)*1E-6/4.6
-
+      srad = weather%srad
+      parday = sum(parhr*3600.)*1E-6/4.6
+      parsunday = sum(parsunHour)*1E-6/4.6
+      parshday = sum(parshHour)*1E-6/4.6
+      radtotday = sum(radtotHour)*1E-6/4.6
 
 !-----------------------------------------------------------------------
 ! End of dynamic if structure
 !-----------------------------------------------------------------------
-end if  
+   end if
 
 !----------------------------------------------------------------------
 ! End of subroutine
 !----------------------------------------------------------------------
-return
+   return
 end subroutine MZ_AG_Photsynt
 
-
 !==============================================================================================================================
-! Variable definitions                                                                                  Unit 
+! Variable definitions                                                                                  Unit
 !------------------------------------------------------------------------------------------------------------------------------
-! amtrh        Hourly atmospheric transmission coefficient or ratio of solar:extraterrestrial radiation - 
+! amtrh        Hourly atmospheric transmission coefficient or ratio of solar:extraterrestrial radiation -
 ! as           Asymptote of the leaf length vs. leaf area relationship                                  cm
 ! asmax        Maximum instantaneous assimilation at 30 degC                                            �mol[CO2]/m2/s
 ! azir         Row azimuth relative to North                                                            degrees
@@ -291,7 +288,7 @@ end subroutine MZ_AG_Photsynt
 ! files        Species file name                                                                        -
 ! froll        Leaf rolling factor associated with soil water stress affecting cell expansion           -
 ! frdifp(h)    Hourly fraction diffuse photon flux density after correcting                             -
-!              for circumsolar radiation (Spitters, 1986) 
+!              for circumsolar radiation (Spitters, 1986)
 ! gddae        Cumulative growing degree day after emergence                                            degree-days
 ! greenla(l)   Green leaf area for leaf l                                                               cm2
 ! h            Hourly iteration counter (1-24)                                                          -
@@ -314,7 +311,7 @@ end subroutine MZ_AG_Photsynt
 ! parhr(h)     Hourly photosynthetically active radiation (PAR)                                         �mol[quanta]/m2/s
 ! parsh(l)     Photosynthetically active radiation absorbed by leaf l in the shaded zone                �mol[quanta]/m2/s
 ! parsun(l)    Photosynthetically active radiation absorbed by leaf l in the sunlit zone                �mol[quanta]/m2/s
-! pathsr       Directory containing (or path to ) the species file                                      -                 
+! pathsr       Directory containing (or path to ) the species file                                      -
 ! pg           Daily canopy gross assimilation (glucose equivalent)                                     g[glucose]/m2/day
 ! pgday        Daily canopy gross assimilation (CO2 uptake)                                             g[CO2]/m2/day
 ! pghr         Canopy instantaneous gross assimilation                                                  �mol[CO2]/m2/s
@@ -331,10 +328,10 @@ end subroutine MZ_AG_Photsynt
 ! scvp         Scattering coefficient used to calculate diffuse reflectance
 ! sndn         Time of sunset                                                                           hour
 ! snup         Time of sunrise                                                                          hour
-! tairhr(h)    Hourly air temperature                                                                   degrees   
+! tairhr(h)    Hourly air temperature                                                                   degrees
 ! tincr        Time increment                                                                           hour
 ! ts           Number of hourly time steps per day                                                      -
 ! xc           Parameter X for calculating black layer extinction coefficient                           -
-!              according to Campbell (1986) 
+!              according to Campbell (1986)
 !==============================================================================================================================
 
